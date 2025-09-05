@@ -1,6 +1,131 @@
 <mvc:View controllerName="com.globant.aichat.aichatpdfui5.controller.Home"
     xmlns:mvc="sap.ui.core.mvc"
-    xmlns="sap.m">
-    <Page id="page" title="{i18n>title}">
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core"
+    xmlns:f="sap.f"
+    xmlns:layout="sap.ui.layout"
+    xmlns:unified="sap.ui.unified">
+    
+    <Page id="page" showHeader="false" class="sapUiContentPadding">
+        <content>
+            <!-- Header Section -->
+            <VBox class="sapUiMediumMarginBottom">
+                <HBox alignItems="Center" class="sapUiMediumMarginBottom">
+                    <Avatar src="sap-icon://robot" displaySize="M" backgroundColor="Accent6" class="sapUiTinyMarginEnd"/>
+                    <Title text="AI CAP SDK - Chat &amp; PDF Demo" level="H1" class="sapUiMediumMarginEnd"/>
+                </HBox>
+                
+                <Text text="Conectado a SAP AI Core - Selección dinámica de modelos disponibles" class="sapUiMediumMarginBottom"/>
+                
+                <!-- Success Message -->
+                <MessageStrip 
+                    text="11 modelos disponibles cargados exitosamente" 
+                    type="Success" 
+                    showIcon="true"
+                    class="sapUiMediumMarginBottom"/>
+            </VBox>
+
+            <!-- Model Selection Panel -->
+            <Panel headerText="🤖 Seleccionar Modelo (para todas las funciones):" 
+                   expandable="false" 
+                   class="sapUiMediumMarginBottom">
+                <content>
+                    <VBox class="sapUiContentPadding">
+                        <ComboBox 
+                            id="modelComboBox"
+                            placeholder="Seleccionar modelo..."
+                            items="{path: '/getAvailableModels'}"
+                            width="100%">
+                            <core:Item key="{id}" text="{modelName}" />
+                        </ComboBox>
+                    </VBox>
+                </content>
+            </Panel>
+
+            <!-- Tab Container for Chat and PDF Analysis -->
+            <IconTabBar id="tabBar" 
+                       selectedKey="chatTab" 
+                       class="sapUiResponsiveContentPadding"
+                       expandable="false">
+                
+                <!-- Chat General Tab -->
+                <items>
+                    <IconTabFilter key="chatTab" 
+                                  text="Chat General" 
+                                  icon="sap-icon://discussion-2"
+                                  iconColor="Default">
+                        <content>
+                            <VBox class="sapUiMediumMarginTop">
+                                <!-- Chat Input Area -->
+                                <VBox width="100%" class="sapUiMediumMarginBottom">
+                                    <TextArea id="chatInput"
+                                             placeholder="Haz una pregunta..."
+                                             rows="4"
+                                             width="100%"
+                                             class="sapUiMediumMarginBottom"/>
+                                    <HBox width="100%" justifyContent="End">
+                                        <Button id="askButton"
+                                               text="Preguntar"
+                                               type="Emphasized"
+                                               icon="sap-icon://paper-plane"
+                                               press="onAskQuestion"/>
+                                    </HBox>
+                                </VBox>
+                                
+                                <!-- Chat Messages Area -->
+                                <ScrollContainer id="chatContainer"
+                                               height="400px"
+                                               vertical="true"
+                                               class="sapUiMediumMarginTop">
+                                    <VBox id="chatMessages" class="sapUiContentPadding">
+                                        <!-- Chat messages will be added here dynamically -->
+                                    </VBox>
+                                </ScrollContainer>
+                            </VBox>
+                        </content>
+                    </IconTabFilter>
+
+                    <!-- PDF Analysis Tab -->
+                    <IconTabFilter key="pdfTab" 
+                                  text="Análisis PDF" 
+                                  icon="sap-icon://pdf-attachment"
+                                  iconColor="Default">
+                        <content>
+                            <VBox class="sapUiMediumMarginTop">
+                                <!-- PDF Upload Area -->
+                                <Panel headerText="Subir PDF para análisis" class="sapUiMediumMarginBottom">
+                                    <content>
+                                        <VBox class="sapUiContentPadding">
+                                            <items>
+                                                <unified:FileUploader id="pdfUploader"
+                                                            name="pdfFile"
+                                                            uploadUrl=""
+                                                            tooltip="Seleccionar archivo PDF"
+                                                            fileType="pdf"
+                                                            maximumFileSize="10"
+                                                            class="sapUiMediumMarginBottom"/>
+                                                <Button text="Analizar PDF" 
+                                                       type="Emphasized" 
+                                                       icon="sap-icon://document-text"
+                                                       press="onAnalyzePDF"/>
+                                            </items>
+                                        </VBox>
+                                    </content>
+                                </Panel>
+
+                                <!-- PDF Analysis Results -->
+                                <ScrollContainer height="350px" vertical="true">
+                                    <VBox id="pdfAnalysisResults" class="sapUiContentPadding">
+                                        <MessageStrip text="Sube un archivo PDF para comenzar el análisis" 
+                                                     type="Information" 
+                                                     showIcon="true"/>
+                                    </VBox>
+                                </ScrollContainer>
+                            </VBox>
+                        </content>
+                    </IconTabFilter>
+                </items>
+            </IconTabBar>
+        </content>
     </Page>
 </mvc:View>

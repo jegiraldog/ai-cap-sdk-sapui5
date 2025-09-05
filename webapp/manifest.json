@@ -58,7 +58,7 @@
     }
   },
   "sap.ui5": {
-    "flexEnabled": true,
+    "flexEnabled": false,
     "dependencies": {
       "minUI5Version": "1.140.0",
       "libs": {
@@ -80,7 +80,9 @@
       "": {
         "dataSource": "mainService",
         "preload": true,
-        "settings": {}
+        "settings": {
+          "useBatch": false
+        }
       }
     },
     "resources": {
