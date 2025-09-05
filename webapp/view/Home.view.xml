@@ -15,10 +15,11 @@
                     <Title text="AI CAP SDK - Chat &amp; PDF Demo" level="H1" class="sapUiMediumMarginEnd"/>
                 </HBox>
                 
-                <Text text="Conectado a SAP AI Core - Selección dinámica de modelos disponibles" class="sapUiMediumMarginBottom"/>
+                <Text visible="false" text="Conectado a SAP AI Core - Selección dinámica de modelos disponibles" class="sapUiMediumMarginBottom"/>
                 
                 <!-- Success Message -->
                 <MessageStrip 
+                    id="successMessage"
                     text="11 modelos disponibles cargados exitosamente" 
                     type="Success" 
                     showIcon="true"
