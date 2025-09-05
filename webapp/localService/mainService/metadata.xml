@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<edmx:Edmx Version="1.0" xmlns:edmx="http://schemas.microsoft.com/ado/2007/06/edmx" xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata" xmlns:sap="http://www.sap.com/Protocols/SAPData">
+    <edmx:Reference Uri="https://oasis-tcs.github.io/odata-vocabularies/vocabularies/Org.OData.Capabilities.V1.xml" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx">
+        <edmx:Include Alias="Capabilities" Namespace="Org.OData.Capabilities.V1"/>
+    </edmx:Reference>
+    <edmx:Reference Uri="https://sap.github.io/odata-vocabularies/vocabularies/Common.xml" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx">
+        <edmx:Include Alias="Common" Namespace="com.sap.vocabularies.Common.v1"/>
+    </edmx:Reference>
+    <edmx:Reference Uri="https://oasis-tcs.github.io/odata-vocabularies/vocabularies/Org.OData.Core.V1.xml" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx">
+        <edmx:Include Alias="Core" Namespace="Org.OData.Core.V1"/>
+    </edmx:Reference>
+    <edmx:DataServices m:DataServiceVersion="2.0">
+        <Schema Namespace="AIService" xmlns="http://schemas.microsoft.com/ado/2008/09/edm">
+            <Annotation Term="Core.Links" xmlns="http://docs.oasis-open.org/odata/ns/edm">
+                <Collection>
+                    <Record>
+                        <PropertyValue Property="rel" String="author"/>
+                        <PropertyValue Property="href" String="https://cap.cloud.sap"/>
+                    </Record>
+                </Collection>
+            </Annotation>
+            <EntityContainer Name="EntityContainer" m:IsDefaultEntityContainer="true">
+                <EntitySet Name="getAvailableModels" EntityType="AIService.getAvailableModels"/>
+                <FunctionImport Name="askQuestion" ReturnType="AIService.return_AIService_askQuestion" m:HttpMethod="POST">
+                    <Parameter Name="question" Type="Edm.String" MaxLength="1000" Mode="In" Nullable="true"/>
+                    <Parameter Name="selectedModel" Type="Edm.String" MaxLength="255" Mode="In" Nullable="true"/>
+                </FunctionImport>
+                <FunctionImport Name="healthCheck" ReturnType="AIService.return_AIService_healthCheck" m:HttpMethod="POST"/>
+                <FunctionImport Name="uploadPDF" ReturnType="AIService.return_AIService_uploadPDF" m:HttpMethod="POST"/>
+                <FunctionImport Name="processPDF" ReturnType="AIService.return_AIService_processPDF" m:HttpMethod="POST">
+                    <Parameter Name="fileName" Type="Edm.String" MaxLength="255" Mode="In" Nullable="true"/>
+                </FunctionImport>
+                <FunctionImport Name="askAboutPDF" ReturnType="AIService.return_AIService_askAboutPDF" m:HttpMethod="POST">
+                    <Parameter Name="question" Type="Edm.String" MaxLength="1000" Mode="In" Nullable="true"/>
+                    <Parameter Name="fileName" Type="Edm.String" MaxLength="255" Mode="In" Nullable="true"/>
+                    <Parameter Name="selectedModel" Type="Edm.String" MaxLength="255" Mode="In" Nullable="true"/>
+                </FunctionImport>
+                <FunctionImport Name="listUploadedPDFs" ReturnType="Collection(AIService.return_AIService_listUploadedPDFs)" m:HttpMethod="POST"/>
+            </EntityContainer>
+            <EntityType Name="getAvailableModels">
+                <Key>
+                    <PropertyRef Name="id"/>
+                </Key>
+                <Property Name="id" Type="Edm.String" Nullable="false"/>
+                <Property Name="name" Type="Edm.String"/>
+                <Property Name="modelName" Type="Edm.String"/>
+                <Property Name="modelVersion" Type="Edm.String"/>
+                <Property Name="status" Type="Edm.String"/>
+                <Property Name="deploymentId" Type="Edm.String"/>
+                <Property Name="configName" Type="Edm.String"/>
+                <Property Name="scenarioId" Type="Edm.String"/>
+                <Property Name="createdAt" Type="Edm.String"/>
+                <Property Name="url" Type="Edm.String"/>
+            </EntityType>
+            <ComplexType Name="return_AIService_askQuestion">
+                <Property Name="question" Type="Edm.String"/>
+                <Property Name="answer" Type="Edm.String"/>
+                <Property Name="model" Type="Edm.String"/>
+                <Property Name="deploymentId" Type="Edm.String"/>
+                <Property Name="model_params" Type="AIService.return_AIService_askQuestion_model_params"/>
+                <Property Name="timestamp" Type="Edm.String"/>
+            </ComplexType>
+            <ComplexType Name="return_AIService_askQuestion_model_params">
+                <Property Name="temperature" Type="Edm.Double"/>
+                <Property Name="max_tokens" Type="Edm.Int32"/>
+                <Property Name="top_p" Type="Edm.Double"/>
+            </ComplexType>
+            <ComplexType Name="return_AIService_healthCheck">
+                <Property Name="status" Type="Edm.String"/>
+                <Property Name="service" Type="Edm.String"/>
+                <Property Name="timestamp" Type="Edm.String"/>
+            </ComplexType>
+            <ComplexType Name="return_AIService_uploadPDF">
+                <Property Name="success" Type="Edm.Boolean"/>
+                <Property Name="fileName" Type="Edm.String"/>
+                <Property Name="message" Type="Edm.String"/>
+                <Property Name="timestamp" Type="Edm.String"/>
+            </ComplexType>
+            <ComplexType Name="return_AIService_processPDF">
+                <Property Name="fileName" Type="Edm.String"/>
+                <Property Name="extractedText" Type="Edm.String"/>
+                <Property Name="wordCount" Type="Edm.Int32"/>
+                <Property Name="summary" Type="Edm.String"/>
+                <Property Name="timestamp" Type="Edm.String"/>
+            </ComplexType>
+            <ComplexType Name="return_AIService_askAboutPDF">
+                <Property Name="question" Type="Edm.String"/>
+                <Property Name="answer" Type="Edm.String"/>
+                <Property Name="sourceDocument" Type="Edm.String"/>
+                <Property Name="model" Type="Edm.String"/>
+                <Property Name="deploymentId" Type="Edm.String"/>
+                <Property Name="timestamp" Type="Edm.String"/>
+            </ComplexType>
+            <ComplexType Name="return_AIService_listUploadedPDFs">
+                <Property Name="fileName" Type="Edm.String"/>
+                <Property Name="uploadDate" Type="Edm.String"/>
+                <Property Name="status" Type="Edm.String"/>
+                <Property Name="wordCount" Type="Edm.Int32"/>
+            </ComplexType>
+            <Annotations Target="AIService.EntityContainer/getAvailableModels" xmlns="http://docs.oasis-open.org/odata/ns/edm">
+                <Annotation Term="Capabilities.DeleteRestrictions">
+                    <Record Type="Capabilities.DeleteRestrictionsType">
+                        <PropertyValue Property="Deletable" Bool="false"/>
+                    </Record>
+                </Annotation>
+                <Annotation Term="Capabilities.InsertRestrictions">
+                    <Record Type="Capabilities.InsertRestrictionsType">
+                        <PropertyValue Property="Insertable" Bool="false"/>
+                    </Record>
+                </Annotation>
+                <Annotation Term="Capabilities.UpdateRestrictions">
+                    <Record Type="Capabilities.UpdateRestrictionsType">
+                        <PropertyValue Property="Updatable" Bool="false"/>
+                    </Record>
+                </Annotation>
+            </Annotations>
+        </Schema>
+    </edmx:DataServices>
+</edmx:Edmx>
