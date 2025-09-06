@@ -17,17 +17,10 @@
                 
                 <Text visible="false" text="Conectado a SAP AI Core - Selección dinámica de modelos disponibles" class="sapUiMediumMarginBottom"/>
                 
-                <!-- Success Message -->
-                <MessageStrip 
-                    id="successMessage"
-                    text="11 modelos disponibles cargados exitosamente" 
-                    type="Success" 
-                    showIcon="true"
-                    class="sapUiMediumMarginBottom"/>
             </VBox>
 
             <!-- Model Selection Panel -->
-            <Panel headerText="🤖 Seleccionar Modelo (para todas las funciones):" 
+            <Panel headerText="🤖 Seleccionar Modelo" 
                    expandable="false" 
                    class="sapUiMediumMarginBottom">
                 <content>
@@ -64,7 +57,11 @@
                                              rows="4"
                                              width="100%"
                                              class="sapUiMediumMarginBottom"/>
-                                    <HBox width="100%" justifyContent="End">
+                                    <HBox width="100%" justifyContent="End" alignItems="Center">
+                                        <BusyIndicator id="askBusyIndicator" 
+                                                     visible="false" 
+                                                     size="1rem" 
+                                                     class="sapUiTinyMarginEnd"/>
                                         <Button id="askButton"
                                                text="Preguntar"
                                                type="Emphasized"
@@ -78,8 +75,39 @@
                                                height="400px"
                                                vertical="true"
                                                class="sapUiMediumMarginTop">
-                                    <VBox id="chatMessages" class="sapUiContentPadding">
-                                        <!-- Chat messages will be added here dynamically -->
+                                    <VBox id="chatMessages" class="sapUiContentPadding" items="{chat>/messages}">
+                                        <VBox class="sapUiTinyMarginBottom">
+                                            <MessageStrip 
+                                                visible="{= ${chat>type} !== 'assistant' || ${chat>isLoading} === true}"
+                                                text="{chat>text}"
+                                                type="{parts: ['chat>type'], formatter: '.formatMessageType'}"
+                                                showIcon="true">
+                                                <customData>
+                                                    <core:CustomData key="messageType" value="{chat>type}"/>
+                                                    <core:CustomData key="timestamp" value="{chat>timestamp}"/>
+                                                </customData>
+                                            </MessageStrip>
+                                            <Panel visible="{= ${chat>type} === 'assistant' &amp;&amp; ${chat>isLoading} !== true}"
+                                                   class="sapUiNoContentPadding"
+                                                   backgroundDesign="Transparent">
+                                                <content>
+                                                    <VBox class="sapUiContentPadding">
+                                                        <HBox alignItems="Center" class="sapUiTinyMarginBottom">
+                                                            <core:Icon src="sap-icon://robot" color="Positive" class="sapUiTinyMarginEnd"/>
+                                                            <Text text="🤖 Asistente IA - Modelo: {chat>model}" class="sapUiTinyText"/>
+                                                            <Text text="{chat>timestamp}" class="sapUiTinyText sapUiTinyMarginBegin"/>
+                                                        </HBox>
+                                                        <FormattedText htmlText="{parts: ['chat>text'], formatter: '.formatMarkdownToHtml'}" 
+                                                                      class="sapUiSmallMarginTop"/>
+                                                        <HBox visible="{= ${chat>model} !== null}" 
+                                                              alignItems="Center" 
+                                                              class="sapUiTinyMarginTop"
+                                                              justifyContent="SpaceBetween">
+                                                        </HBox>
+                                                    </VBox>
+                                                </content>
+                                            </Panel>
+                                        </VBox>
                                     </VBox>
                                 </ScrollContainer>
                             </VBox>
@@ -88,6 +116,7 @@
 
                     <!-- PDF Analysis Tab -->
                     <IconTabFilter key="pdfTab" 
+                                   enabled="false"
                                   text="Análisis PDF" 
                                   icon="sap-icon://pdf-attachment"
                                   iconColor="Default">
