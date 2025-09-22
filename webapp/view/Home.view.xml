@@ -3,159 +3,163 @@
     xmlns="sap.m"
     xmlns:core="sap.ui.core"
     xmlns:f="sap.f"
-    xmlns:layout="sap.ui.layout"
-    xmlns:unified="sap.ui.unified">
+    xmlns:layout="sap.ui.layout">
     
-    <Page id="page" showHeader="false" class="sapUiContentPadding">
-        <content>
-            <!-- Header Section -->
-            <VBox class="sapUiMediumMarginBottom">
-                <HBox alignItems="Center" class="sapUiMediumMarginBottom">
-                    <Avatar src="sap-icon://robot" displaySize="M" backgroundColor="Accent6" class="sapUiTinyMarginEnd"/>
-                    <Title text="AI CAP SDK - Chat &amp; PDF Demo" level="H1" class="sapUiMediumMarginEnd"/>
-                </HBox>
-                
-                <Text visible="false" text="Conectado a SAP AI Core - Selección dinámica de modelos disponibles" class="sapUiMediumMarginBottom"/>
-                
-            </VBox>
+    <f:DynamicPage id="dynamicPage" showFooter="true">
+        <!-- Header -->
+        <f:title>
+            <f:DynamicPageTitle>
+                <f:heading>
+                    <HBox alignItems="Center">
+                        <Avatar src="sap-icon://robot" 
+                               displaySize="M" 
+                               backgroundColor="Accent6" 
+                               class="sapUiTinyMarginEnd"/>
+                        <Title text="AI Chat Assistant" level="H2"/>
+                    </HBox>
+                </f:heading>
+                <f:actions>
+                    <Button text="Compartir" 
+                           icon="sap-icon://share-2" 
+                           type="Transparent"/>
+                    <Button text="Nuevo Chat" 
+                           icon="sap-icon://add" 
+                           type="Emphasized"
+                           press=".onNewChat"/>
+                </f:actions>
+            </f:DynamicPageTitle>
+        </f:title>
 
-            <!-- Model Selection Panel -->
-            <Panel headerText="🤖 Seleccionar Modelo" 
-                   expandable="false" 
-                   class="sapUiMediumMarginBottom">
-                <content>
-                    <VBox class="sapUiContentPadding">
-                        <ComboBox 
-                            id="modelComboBox"
-                            placeholder="Seleccionar modelo..."
-                            items="{path: '/getAvailableModels'}"
-                            width="100%">
+        <!-- Content - Chat Area -->
+        <f:content>
+            <VBox height="100%" justifyContent="SpaceBetween">
+                <!-- Model Selection - Compact Header -->
+                <Bar class="sapUiTinyMarginBottom">
+                    <contentLeft>
+                        <Label text="Modelo:" class="sapUiTinyMarginEnd"/>
+                        <ComboBox id="modelComboBox"
+                                 placeholder="Seleccionar modelo..."
+                                 items="{path: '/getAvailableModels'}"
+                                 width="200px"
+                                 selectedKey="{ui>/selectedModel}">
                             <core:Item key="{id}" text="{modelName}" />
                         </ComboBox>
+                    </contentLeft>
+                    <contentRight>
+                        <Button icon="sap-icon://settings" 
+                               type="Transparent" 
+                               tooltip="Configuración"/>
+                    </contentRight>
+                </Bar>
+
+                <!-- Chat Messages Area -->
+                <ScrollContainer id="chatContainer"
+                               height="100%"
+                               vertical="true"
+                               class="sapUiTinyMargin">
+                    
+                    <!-- Welcome Message when no messages -->
+                    <VBox visible="{= ${chat>/messages}.length === 0}" 
+                          alignItems="Center" 
+                          justifyContent="Center"
+                          class="sapUiMediumMarginTop">
+                        <core:Icon src="sap-icon://robot" 
+                                  size="3rem" 
+                                  color="Positive"
+                                  class="sapUiSmallMarginBottom"/>
+                        <Title text="¡Hola! ¿En qué puedo ayudarte hoy?" 
+                              level="H4" 
+                              textAlign="Center"
+                              class="sapUiSmallMarginBottom"/>
+                        <Text text="Selecciona un modelo y comienza a chatear" 
+                             textAlign="Center"/>
                     </VBox>
-                </content>
-            </Panel>
 
-            <!-- Tab Container for Chat and PDF Analysis -->
-            <IconTabBar id="tabBar" 
-                       selectedKey="chatTab" 
-                       class="sapUiResponsiveContentPadding"
-                       expandable="false">
-                
-                <!-- Chat General Tab -->
-                <items>
-                    <IconTabFilter key="chatTab" 
-                                  text="Chat General" 
-                                  icon="sap-icon://discussion-2"
-                                  iconColor="Default">
-                        <content>
-                            <VBox class="sapUiMediumMarginTop">
-                                <!-- Chat Input Area -->
-                                <VBox width="100%" class="sapUiMediumMarginBottom">
-                                    <TextArea id="chatInput"
-                                             placeholder="Haz una pregunta..."
-                                             rows="4"
-                                             width="100%"
-                                             class="sapUiMediumMarginBottom"/>
-                                    <HBox width="100%" justifyContent="End" alignItems="Center">
-                                        <BusyIndicator id="askBusyIndicator" 
-                                                     visible="false" 
-                                                     size="1rem" 
-                                                     class="sapUiTinyMarginEnd"/>
-                                        <Button id="askButton"
-                                               text="Preguntar"
-                                               type="Emphasized"
-                                               icon="sap-icon://paper-plane"
-                                               press="onAskQuestion"/>
-                                    </HBox>
-                                </VBox>
-                                
-                                <!-- Chat Messages Area -->
-                                <ScrollContainer id="chatContainer"
-                                               height="400px"
-                                               vertical="true"
-                                               class="sapUiMediumMarginTop">
-                                    <VBox id="chatMessages" class="sapUiContentPadding" items="{chat>/messages}">
-                                        <VBox class="sapUiTinyMarginBottom">
-                                            <MessageStrip 
-                                                visible="{= ${chat>type} !== 'assistant' || ${chat>isLoading} === true}"
-                                                text="{chat>text}"
-                                                type="{parts: ['chat>type'], formatter: '.formatMessageType'}"
-                                                showIcon="true">
-                                                <customData>
-                                                    <core:CustomData key="messageType" value="{chat>type}"/>
-                                                    <core:CustomData key="timestamp" value="{chat>timestamp}"/>
-                                                </customData>
-                                            </MessageStrip>
-                                            <Panel visible="{= ${chat>type} === 'assistant' &amp;&amp; ${chat>isLoading} !== true}"
-                                                   class="sapUiNoContentPadding"
-                                                   backgroundDesign="Transparent">
-                                                <content>
-                                                    <VBox class="sapUiContentPadding">
-                                                        <HBox alignItems="Center" class="sapUiTinyMarginBottom">
-                                                            <core:Icon src="sap-icon://robot" color="Positive" class="sapUiTinyMarginEnd"/>
-                                                            <Text text="🤖 Asistente IA - Modelo: {chat>model}" class="sapUiTinyText"/>
-                                                            <Text text="{chat>timestamp}" class="sapUiTinyText sapUiTinyMarginBegin"/>
-                                                        </HBox>
-                                                        <FormattedText htmlText="{parts: ['chat>text'], formatter: '.formatMarkdownToHtml'}" 
-                                                                      class="sapUiSmallMarginTop"/>
-                                                        <HBox visible="{= ${chat>model} !== null}" 
-                                                              alignItems="Center" 
-                                                              class="sapUiTinyMarginTop"
-                                                              justifyContent="SpaceBetween">
-                                                        </HBox>
-                                                    </VBox>
-                                                </content>
-                                            </Panel>
-                                        </VBox>
-                                    </VBox>
-                                </ScrollContainer>
+                    <!-- Chat Messages - Debug Version -->
+                    <VBox items="{chat>/messages}" class="sapUiTinyMargin">
+                        
+                        <VBox class="sapUiTinyMarginBottom">
+                            <!-- User Message -->
+                            <VBox visible="{= ${chat>type} === 'user'}">
+                                <HBox justifyContent="End" class="sapUiTinyMarginBottom">
+                                    <Panel backgroundDesign="Solid" width="90%">
+                                        <content>
+                                            <VBox class="sapUiTinyMargin">
+                                                <Text text="{chat>text}" class="sapUiMediumText"/>
+                                                <Text text="{chat>timestamp}" class="sapUiTinyText"/>
+                                            </VBox>
+                                        </content>
+                                    </Panel>
+                                </HBox>
                             </VBox>
-                        </content>
-                    </IconTabFilter>
 
-                    <!-- PDF Analysis Tab -->
-                    <IconTabFilter key="pdfTab" 
-                                   enabled="false"
-                                  text="Análisis PDF" 
-                                  icon="sap-icon://pdf-attachment"
-                                  iconColor="Default">
-                        <content>
-                            <VBox class="sapUiMediumMarginTop">
-                                <!-- PDF Upload Area -->
-                                <Panel headerText="Subir PDF para análisis" class="sapUiMediumMarginBottom">
-                                    <content>
-                                        <VBox class="sapUiContentPadding">
-                                            <items>
-                                                <unified:FileUploader id="pdfUploader"
-                                                            name="pdfFile"
-                                                            uploadUrl=""
-                                                            tooltip="Seleccionar archivo PDF"
-                                                            fileType="pdf"
-                                                            maximumFileSize="10"
-                                                            class="sapUiMediumMarginBottom"/>
-                                                <Button text="Analizar PDF" 
-                                                       type="Emphasized" 
-                                                       icon="sap-icon://document-text"
-                                                       press="onAnalyzePDF"/>
-                                            </items>
-                                        </VBox>
-                                    </content>
-                                </Panel>
-
-                                <!-- PDF Analysis Results -->
-                                <ScrollContainer height="350px" vertical="true">
-                                    <VBox id="pdfAnalysisResults" class="sapUiContentPadding">
-                                        <MessageStrip text="Sube un archivo PDF para comenzar el análisis" 
-                                                     type="Information" 
-                                                     showIcon="true"/>
-                                    </VBox>
-                                </ScrollContainer>
+                            <!-- Assistant Message -->
+                            <VBox visible="{= ${chat>type} === 'assistant'}">
+                                <HBox justifyContent="Start" class="sapUiTinyMarginBottom">
+                                    <Panel backgroundDesign="Transparent" width="95%">
+                                        <content>
+                                            <VBox class="sapUiTinyMargin">
+                                                <!-- Assistant Header -->
+                                                <HBox alignItems="Center" class="sapUiTinyMarginBottom">
+                                                    <Avatar src="sap-icon://robot" 
+                                                           displaySize="XS" 
+                                                           backgroundColor="Accent6"
+                                                           class="sapUiTinyMarginEnd"/>
+                                                    <Text text="AI Assistant" class="sapUiSmallText"/>
+                                                </HBox>
+                                                
+                                                <!-- Loading State -->
+                                                <VBox visible="{chat>isLoading}">
+                                                    <HBox alignItems="Center">
+                                                        <BusyIndicator size="0.8rem" class="sapUiTinyMarginEnd"/>
+                                                        <Text text="Generando respuesta..." class="sapUiSmallText"/>
+                                                    </HBox>
+                                                </VBox>
+                                                
+                                                <!-- Assistant Response -->
+                                                <VBox visible="{= !${chat>isLoading}}">
+                                                    <Text text="{chat>text}" class="sapUiMediumText"/>
+                                                    <Text text="{chat>timestamp}" class="sapUiTinyText"/>
+                                                </VBox>
+                                            </VBox>
+                                        </content>
+                                    </Panel>
+                                </HBox>
                             </VBox>
-                        </content>
-                    </IconTabFilter>
-                </items>
-            </IconTabBar>
-        </content>
-    </Page>
+
+                            <!-- Error Message -->
+                            <VBox visible="{= ${chat>type} === 'error'}">
+                                <HBox justifyContent="Center" class="sapUiTinyMarginBottom">
+                                    <MessageStrip text="{chat>text}" type="Error" showIcon="true"/>
+                                </HBox>
+                            </VBox>
+                        </VBox>
+
+                    </VBox>
+                </ScrollContainer>
+            </VBox>
+        </f:content>
+
+        <!-- Footer - Input Area -->
+        <f:footer>
+            <OverflowToolbar>
+                <ToolbarSpacer/>
+                <TextArea id="chatInput"
+                         placeholder="Escribe tu mensaje aquí..."
+                         rows="1"
+                         width="70%"
+                         maxLength="4000"
+                         growing="true"
+                         growingMaxLines="4"
+                         showExceededText="false"
+                         liveChange=".onInputChange"/>
+                <Button id="askButton"
+                       icon="sap-icon://paper-plane"
+                       type="Emphasized"
+                       tooltip="Enviar mensaje"
+                       press=".onAskQuestion"/>
+                <ToolbarSpacer/>
+            </OverflowToolbar>
+        </f:footer>
+    </f:DynamicPage>
 </mvc:View>

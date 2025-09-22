@@ -19,6 +19,14 @@ sap.ui.define([
                 messages: []
             });
             this.getView().setModel(oChatModel, "chat");
+
+            // Initialize UI model for interface state
+            const oUIModel = new JSONModel({
+                selectedModel: "",
+                canSend: false,
+                inputLength: 0
+            });
+            this.getView().setModel(oUIModel, "ui");
         },
 
         onAskQuestion() {
@@ -125,28 +133,14 @@ sap.ui.define([
                 deploymentId: oModelInfo?.deploymentId || null
             };
 
-            // Strategy: Add all messages at the beginning to show latest conversation first
-            // For each conversation pair, we want: Question first, then Response
-            if (sType === "user") {
-                // User question: add at beginning
-                aMessages.unshift(oNewMessage);
-            } else {
-                // Assistant response: find the most recent user message and insert after it
-                const lastUserIndex = aMessages.findIndex(msg => msg.type === "user");
-                if (lastUserIndex !== -1) {
-                    // Insert right after the user question
-                    aMessages.splice(lastUserIndex + 1, 0, oNewMessage);
-                } else {
-                    // Fallback: add at beginning if no user message found
-                    aMessages.unshift(oNewMessage);
-                }
-            }
+            // Simple strategy: Add all messages at the end (chronological order)
+            aMessages.push(oNewMessage);
             
             oChatModel.setProperty("/messages", aMessages);
 
-            // Scroll to top since newest messages are now at the top
+            // Scroll to bottom to show latest messages
             setTimeout(() => {
-                this._scrollChatToTop();
+                this._scrollChatToBottom();
             }, 100);
 
             return sMessageId;
@@ -309,6 +303,94 @@ formatMarkdownToHtml(sText) {
     
     return result.trim();
 },
+
+        /**
+         * Handles input change to update character count and send button state
+         * @param {sap.ui.base.Event} oEvent - The input change event
+         */
+        onInputChange(oEvent) {
+            const sValue = oEvent.getParameter("value");
+            const oUIModel = this.getView().getModel("ui");
+            const oComboBox = this.byId("modelComboBox");
+            const sSelectedModel = oComboBox.getSelectedKey();
+            
+            // Update input length
+            oUIModel.setProperty("/inputLength", sValue.length);
+            
+            // Update send button state
+            const bCanSend = sValue.trim().length > 0 && sSelectedModel;
+            oUIModel.setProperty("/canSend", bCanSend);
+        },
+
+        /**
+         * Handles new chat button press
+         */
+        onNewChat() {
+            const oChatModel = this.getView().getModel("chat");
+            oChatModel.setProperty("/messages", []);
+            
+            // Clear input
+            const oTextArea = this.byId("chatInput");
+            if (oTextArea) {
+                oTextArea.setValue("");
+            }
+            
+            // Reset UI state
+            const oUIModel = this.getView().getModel("ui");
+            oUIModel.setProperty("/inputLength", 0);
+            oUIModel.setProperty("/canSend", false);
+            
+            MessageToast.show("Nuevo chat iniciado");
+        },
+
+        /**
+         * Handles copy message button press
+         * @param {sap.ui.base.Event} oEvent - The button press event
+         */
+        onCopyMessage(oEvent) {
+            const oBindingContext = oEvent.getSource().getBindingContext("chat");
+            const sText = oBindingContext.getProperty("text");
+            
+            // Use the Clipboard API if available
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(sText).then(() => {
+                    MessageToast.show("Mensaje copiado al portapapeles");
+                }).catch(() => {
+                    MessageToast.show("Error al copiar el mensaje");
+                });
+            } else {
+                // Fallback for older browsers
+                const textArea = document.createElement("textarea");
+                textArea.value = sText;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    MessageToast.show("Mensaje copiado al portapapeles");
+                } catch (err) {
+                    MessageToast.show("Error al copiar el mensaje");
+                }
+                document.body.removeChild(textArea);
+            }
+        },
+
+        /**
+         * Formatter for assistant info (model and timestamp)
+         * @param {string} sModel - The model name
+         * @param {string} sTimestamp - The timestamp
+         * @returns {string} Formatted info string
+         */
+        formatAssistantInfo(sModel, sTimestamp) {
+            let sInfo = "";
+            if (sModel) {
+                sInfo += `Modelo: ${sModel}`;
+            }
+            if (sTimestamp) {
+                if (sInfo) sInfo += " • ";
+                sInfo += sTimestamp;
+            }
+            return sInfo;
+        },
 
         onAnalyzePDF() {
             // TODO: Implement PDF analysis functionality
