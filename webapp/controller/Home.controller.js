@@ -375,6 +375,18 @@ formatMarkdownToHtml(sText) {
         },
 
         /**
+         * Formatter for assistant title with model name
+         * @param {string} sModel - The model name
+         * @returns {string} Formatted title string with HTML
+         */
+        formatAssistantTitle(sModel) {
+            if (sModel) {
+                return `<strong>AI Assistant - ${sModel}</strong>`;
+            }
+            return "<strong>AI Assistant</strong>";
+        },
+
+        /**
          * Formatter for assistant info (model and timestamp)
          * @param {string} sModel - The model name
          * @param {string} sTimestamp - The timestamp

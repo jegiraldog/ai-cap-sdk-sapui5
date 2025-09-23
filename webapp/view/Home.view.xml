@@ -107,7 +107,7 @@
                                                            displaySize="XS" 
                                                            backgroundColor="Accent6"
                                                            class="sapUiTinyMarginEnd"/>
-                                                    <Text text="AI Assistant" class="sapUiSmallText"/>
+                                                    <FormattedText htmlText="{path: 'chat>model', formatter: '.formatAssistantTitle'}" class="sapUiSmallText"/>
                                                 </HBox>
                                                 
                                                 <!-- Loading State -->
