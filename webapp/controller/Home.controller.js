@@ -30,6 +30,18 @@ sap.ui.define([
                 attachedFileName: ""
             });
             this.getView().setModel(oUIModel, "ui");
+
+            // Initialize PDF model for PDF management
+            const oPDFModel = new JSONModel({
+                pdfs: [],
+                selectedPDF: null,
+                isUploading: false,
+                uploadProgress: 0
+            });
+            this.getView().setModel(oPDFModel, "pdf");
+
+            // Load initial PDF list
+            this._loadPDFList();
         },
 
         onAskQuestion() {
@@ -38,9 +50,8 @@ sap.ui.define([
             const sQuestion = oTextArea.getValue().trim();
             const oComboBox = this.byId("modelComboBox");
             const sSelectedModel = oComboBox.getSelectedKey();
-            const oUIModel = this.getView().getModel("ui");
-            const bHasAttachedFile = oUIModel.getProperty("/hasAttachedFile");
-            const oAttachedFile = oUIModel.getProperty("/attachedFile");
+            const oPDFModel = this.getView().getModel("pdf");
+            const sSelectedPDF = oPDFModel.getProperty("/selectedPDF");
 
             // Validaciones centralizadas
             if (!sQuestion) {
@@ -55,112 +66,84 @@ sap.ui.define([
                 return;
             }
 
-            if (bHasAttachedFile && !oAttachedFile) {
-                MessageToast.show("Error: archivo PDF no válido");
-                return;
-            }
-
             // Preparar UI para procesamiento
             this._setBusyState(true);
             oTextArea.setValue("");
             this._addMessageToChat(sQuestion, "user");
 
-            const sLoadingMessage = bHasAttachedFile ? "Analizando PDF..." : "Procesando pregunta...";
+            const sLoadingMessage = sSelectedPDF ? "Analizando PDF..." : "Procesando pregunta...";
             const sLoadingId = this._addMessageToChat(sLoadingMessage, "assistant", true);
 
             // Llamada directa al servicio apropiado
-            if (bHasAttachedFile) {
-                this._askAboutPDF(sQuestion, oAttachedFile.name, sSelectedModel, sLoadingId);
+            if (sSelectedPDF) {
+                this._askAboutPDF(sQuestion, sSelectedPDF, sSelectedModel, sLoadingId);
             } else {
                 this._askQuestion(sQuestion, sSelectedModel, sLoadingId);
             }
         },
 
         /**
-         * Realiza consulta simple usando OData V2
+         * Realiza consulta simple usando AIService
          * @param {string} sQuestion - La pregunta
          * @param {string} sSelectedModel - El modelo seleccionado
          * @param {string} sLoadingId - ID del mensaje de carga
          */
         _askQuestion(sQuestion, sSelectedModel, sLoadingId) {
-            const oModel = this.getOwnerComponent().getModel();
-            
-            oModel.callFunction("/askQuestion", {
-                method: "POST",
-                urlParameters: {
-                    question: sQuestion,
-                    selectedModel: sSelectedModel
-                },
-                success: (oData, response) => {
+            this._oAIService.askQuestion(sQuestion, sSelectedModel)
+                .then((oData) => {
                     this._setBusyState(false);
                     this._removeMessageFromChat(sLoadingId);
                     
-                    if (oData && oData.answer) {
-                        this._addMessageToChat(oData.answer, "assistant", false, {
-                            model: oData.model || sSelectedModel,
-                            deploymentId: oData.deploymentId
+                    // La respuesta viene en oData.askQuestion.value según la imagen
+                    const oResponse = oData.askQuestion?.value || oData.askQuestion || oData;
+                    
+                    if (oResponse && oResponse.answer) {
+                        this._addMessageToChat(oResponse.answer, "assistant", false, {
+                            model: oResponse.model || sSelectedModel,
+                            deploymentId: oResponse.deploymentId
                         });
                         
-                        if (oData.model) {
-                            MessageToast.show(`Respuesta generada por: ${oData.model}`);
+                        if (oResponse.model) {
+                            MessageToast.show(`Respuesta generada por: ${oResponse.model}`);
                         }
                     } else {
                         this._addMessageToChat("No se recibió una respuesta válida del modelo", "error");
                     }
-                },
-                error: (oError) => {
+                })
+                .catch((oError) => {
                     this._setBusyState(false);
                     this._removeMessageFromChat(sLoadingId);
                     
-                    const sErrorMsg = `Error al procesar pregunta: ${oError.message || 'Error desconocido'}`;
+                    const sErrorMsg = oError.message || 'Error desconocido';
                     this._addMessageToChat(sErrorMsg, "error");
                     MessageToast.show(sErrorMsg);
-                }
-            });
+                });
         },
 
         /**
-         * Realiza consulta sobre PDF usando OData V2
+         * Realiza consulta sobre PDF usando AIService
          * @param {string} sQuestion - La pregunta
          * @param {string} sFileName - Nombre del archivo PDF
          * @param {string} sSelectedModel - El modelo seleccionado
          * @param {string} sLoadingId - ID del mensaje de carga
          */
         _askAboutPDF(sQuestion, sFileName, sSelectedModel, sLoadingId) {
-            // Validaciones específicas para PDF
-            if (!sQuestion || !sFileName) {
-                MessageToast.show("Pregunta y archivo PDF son obligatorios");
-                this._setBusyState(false);
-                this._removeMessageFromChat(sLoadingId);
-                return;
-            }
-
-            const oModel = this.getOwnerComponent().getModel();
-            
-            // Llamada OData V2 directa siguiendo mejores prácticas
-            oModel.callFunction("/askAboutPDF", {
-                method: "POST",
-                urlParameters: {
-                    question: sQuestion,           // String(1000)
-                    fileName: sFileName,           // String(255)
-                    selectedModel: sSelectedModel  // String(255) - puede ser null/undefined
-                },
-                success: (oData, response) => {
+            this._oAIService.askAboutPDF(sQuestion, sFileName, sSelectedModel)
+                .then((oData) => {
                     this._setBusyState(false);
                     this._removeMessageFromChat(sLoadingId);
                     
-                    // oData contiene la respuesta directa
-                    const sAnswer = oData.answer;
-                    const sModel = oData.model;
-                    const sDocument = oData.sourceDocument;
-                    const sTimestamp = oData.timestamp;
+                    // La respuesta viene en oData.askAboutPDF.value igual que askQuestion
+                    const oResponse = oData.askAboutPDF?.value || oData.askAboutPDF || oData;
+                    
+                    const sAnswer = oResponse.answer;
+                    const sModel = oResponse.model;
+                    const sDocument = oResponse.sourceDocument;
+                    const sTimestamp = oResponse.timestamp;
                     
                     if (sAnswer) {
                         // Mostrar respuesta en la UI
-                        this._displayPDFResponse(oData);
-                        
-                        // Limpiar archivo adjunto después del análisis exitoso
-                        this._clearAttachedFile();
+                        this._displayPDFResponse(oResponse);
                         
                         if (sModel) {
                             MessageToast.show(`Análisis de PDF generado por: ${sModel}`);
@@ -168,16 +151,15 @@ sap.ui.define([
                     } else {
                         this._addMessageToChat("No se recibió una respuesta válida del análisis PDF", "error");
                     }
-                },
-                error: (oError) => {
+                })
+                .catch((oError) => {
                     this._setBusyState(false);
                     this._removeMessageFromChat(sLoadingId);
                     
-                    const sErrorMsg = `Error al consultar PDF: ${oError.message || 'Error desconocido'}`;
+                    const sErrorMsg = oError.message || 'Error desconocido';
                     this._addMessageToChat(sErrorMsg, "error");
                     MessageToast.show(sErrorMsg);
-                }
-            });
+                });
         },
 
         /**
@@ -611,27 +593,30 @@ formatMarkdownToHtml(sText) {
          */
         _updateSendButtonState() {
             const oUIModel = this.getView().getModel("ui");
+            const oPDFModel = this.getView().getModel("pdf");
             const oTextArea = this.byId("chatInput");
-            const oComboBox = this.byId("modelComboBox");
             const oAskButton = this.byId("askButton");
             
             const sValue = oTextArea ? oTextArea.getValue().trim() : "";
-            const sSelectedModel = oComboBox ? oComboBox.getSelectedKey() : "";
-            const bHasAttachedFile = oUIModel.getProperty("/hasAttachedFile");
+            const sSelectedPDF = oPDFModel ? oPDFModel.getProperty("/selectedPDF") : null;
             
-            // Update send button state
-            const bCanSend = sValue.length > 0 && sSelectedModel;
+            // Update send button state - solo requiere texto
+            const bCanSend = sValue.length > 0;
             oUIModel.setProperty("/canSend", bCanSend);
             
-            // Update button text and icon based on attached file
+            // Update button text, icon and style based on selected PDF
             if (oAskButton) {
-                if (bHasAttachedFile) {
-                    oAskButton.setText("Analizar PDF");
-                    oAskButton.setIcon("sap-icon://document-text");
-                    oAskButton.setTooltip("Analizar PDF con IA");
+                oAskButton.setEnabled(bCanSend);
+                
+                if (sSelectedPDF) {
+                    oAskButton.setText("Consultar PDF");
+                    oAskButton.setIcon("sap-icon://pdf-reader");
+                    oAskButton.setType("Accept"); // Verde
+                    oAskButton.setTooltip(`Consultar PDF: ${sSelectedPDF}`);
                 } else {
                     oAskButton.setText("Enviar");
                     oAskButton.setIcon("sap-icon://paper-plane");
+                    oAskButton.setType("Emphasized"); // Azul
                     oAskButton.setTooltip("Enviar mensaje");
                 }
             }
@@ -650,6 +635,315 @@ formatMarkdownToHtml(sText) {
         onAnalyzePDF() {
             // This method is now handled by onAskQuestion when file is attached
             this.onAskQuestion();
+        },
+
+        // ========== PDF MANAGEMENT METHODS ==========
+
+        /**
+         * Loads the list of uploaded PDFs from the server
+         */
+        _loadPDFList() {
+            const oPDFModel = this.getView().getModel("pdf");
+            
+            // TODO: Implementar llamada real al servidor para obtener PDFs
+            // Por ahora, inicializar con lista vacía
+            oPDFModel.setProperty("/pdfs", []);
+            
+            // Llamada futura al servidor:
+            // const oModel = this.getOwnerComponent().getModel();
+            // oModel.callFunction("/getPDFList", {
+            //     success: (oData) => {
+            //         oPDFModel.setProperty("/pdfs", oData.results || []);
+            //     },
+            //     error: (oError) => {
+            //         console.error("Error loading PDF list:", oError);
+            //         oPDFModel.setProperty("/pdfs", []);
+            //     }
+            // });
+        },
+
+        /**
+         * Handles model selection change
+         * @param {sap.ui.base.Event} oEvent - The selection change event
+         */
+        onModelChange(oEvent) {
+            const sSelectedKey = oEvent.getParameter("selectedItem").getKey();
+            const oUIModel = this.getView().getModel("ui");
+            
+            // Update selected model
+            oUIModel.setProperty("/selectedModel", sSelectedKey);
+            
+            // Update send button state
+            this._updateSendButtonState();
+            
+            if (sSelectedKey) {
+                MessageToast.show(`Modelo seleccionado: ${sSelectedKey}`);
+            }
+        },
+
+        /**
+         * Handles file selection in FileUploader
+         * @param {sap.ui.base.Event} oEvent - The file change event
+         */
+        onFileChange(oEvent) {
+            const oFileUploader = oEvent.getSource();
+            const sFileName = oFileUploader.getValue();
+            const oUploadButton = this.byId("uploadButton");
+            
+            // Enable upload button if file is selected
+            if (sFileName) {
+                oUploadButton.setEnabled(true);
+                MessageToast.show(`Archivo seleccionado: ${sFileName}`);
+            } else {
+                oUploadButton.setEnabled(false);
+            }
+        },
+
+        /**
+         * Handles upload button press
+         */
+        onUploadPress() {
+            const oFileUploader = this.byId("pdfUploader");
+            const sFileName = oFileUploader.getValue();
+            
+            if (!sFileName) {
+                MessageToast.show("Por favor, selecciona un archivo PDF");
+                return;
+            }
+
+            // Get the actual file from the FileUploader
+            const oFile = oFileUploader.oFileUpload.files[0];
+            if (!oFile) {
+                MessageToast.show("Error: No se pudo obtener el archivo");
+                return;
+            }
+
+            // Start upload process
+            this._startUploadProcess(oFile);
+        },
+
+        /**
+         * Starts the upload process
+         * @param {File} oFile - The file to upload
+         */
+        _startUploadProcess(oFile) {
+            const oPDFModel = this.getView().getModel("pdf");
+            const oUploadButton = this.byId("uploadButton");
+            
+            // Set uploading state
+            oPDFModel.setProperty("/isUploading", true);
+            oPDFModel.setProperty("/uploadProgress", 0);
+            oUploadButton.setEnabled(false);
+            
+            MessageToast.show("Iniciando subida del PDF...");
+            
+            // Simulate progress
+            this._simulateUploadProgress();
+            
+            // TEMPORAL: Simular subida exitosa
+            setTimeout(() => {
+                const oResponse = {
+                    success: true,
+                    fileName: oFile.name,
+                    message: `PDF "${oFile.name}" subido exitosamente (simulado)`,
+                    processing: true
+                };
+                this._handleUploadSuccess(oResponse, oFile.name);
+                
+                // Agregar PDF simulado a la lista
+                this._addSimulatedPDF(oFile.name);
+            }, 2000);
+        },
+
+        /**
+         * Adds a simulated PDF to the list
+         * @param {string} sFileName - The file name
+         */
+        _addSimulatedPDF(sFileName) {
+            const oPDFModel = this.getView().getModel("pdf");
+            const aPDFs = oPDFModel.getProperty("/pdfs") || [];
+            
+            // Agregar PDF simulado
+            const oNewPDF = {
+                fileName: sFileName,
+                uploadDate: new Date().toISOString(),
+                status: "processing",
+                wordCount: 0
+            };
+            
+            aPDFs.push(oNewPDF);
+            oPDFModel.setProperty("/pdfs", aPDFs);
+            
+            // Simular procesamiento completado después de 3 segundos
+            setTimeout(() => {
+                const aUpdatedPDFs = oPDFModel.getProperty("/pdfs");
+                const oPDF = aUpdatedPDFs.find(pdf => pdf.fileName === sFileName);
+                if (oPDF) {
+                    oPDF.status = "processed";
+                    oPDF.wordCount = Math.floor(Math.random() * 5000) + 1000;
+                    oPDFModel.setProperty("/pdfs", aUpdatedPDFs);
+                    MessageToast.show(`PDF "${sFileName}" procesado y listo para consultas`);
+                }
+            }, 3000);
+        },
+
+        /**
+         * Handles successful upload
+         * @param {object} oResponse - Upload response
+         * @param {string} sFileName - File name
+         */
+        _handleUploadSuccess(oResponse, sFileName) {
+            const oPDFModel = this.getView().getModel("pdf");
+            const oFileUploader = this.byId("pdfUploader");
+            const oUploadButton = this.byId("uploadButton");
+            
+            // Reset uploading state
+            oPDFModel.setProperty("/isUploading", false);
+            oPDFModel.setProperty("/uploadProgress", 100);
+            oUploadButton.setEnabled(false);
+            
+            // Clear file uploader
+            oFileUploader.clear();
+            
+            // Show success message
+            MessageToast.show(oResponse.message || "PDF subido exitosamente");
+            
+            // Show processing message if applicable
+            if (oResponse.processing) {
+                MessageToast.show("El PDF está siendo procesado. Estará disponible para consultas en breve.");
+            }
+            
+            // Reset progress after a delay
+            setTimeout(() => {
+                oPDFModel.setProperty("/uploadProgress", 0);
+            }, 2000);
+        },
+
+        /**
+         * Handles file type mismatch
+         * @param {sap.ui.base.Event} oEvent - The type mismatch event
+         */
+        onTypeMismatch(oEvent) {
+            MessageBox.error("Solo se permiten archivos PDF", {
+                title: "Tipo de archivo no válido"
+            });
+        },
+
+        /**
+         * Handles file size exceed
+         * @param {sap.ui.base.Event} oEvent - The file size exceed event
+         */
+        onFileSizeExceed(oEvent) {
+            MessageBox.error("El archivo es demasiado grande. Tamaño máximo: 10MB", {
+                title: "Archivo demasiado grande"
+            });
+        },
+
+        /**
+         * Handles PDF selection from the list
+         * @param {sap.ui.base.Event} oEvent - The selection change event
+         */
+        onPDFSelect(oEvent) {
+            const oSelectedItem = oEvent.getParameter("listItem");
+            const oPDFModel = this.getView().getModel("pdf");
+            const oPDFList = oEvent.getSource();
+            
+            if (oSelectedItem) {
+                const sFileName = oSelectedItem.getCustomData()[0].getValue();
+                const sStatus = oSelectedItem.getCustomData()[1].getValue();
+                const sCurrentSelected = oPDFModel.getProperty("/selectedPDF");
+                
+                // Si el mismo PDF ya está seleccionado, deseleccionarlo
+                if (sCurrentSelected === sFileName) {
+                    oPDFModel.setProperty("/selectedPDF", null);
+                    oPDFList.setSelectedItem(null);
+                    MessageToast.show("PDF deseleccionado");
+                    this._updateSendButtonState();
+                    return;
+                }
+                
+                // Validate PDF status
+                if (sStatus !== "processed") {
+                    MessageBox.warning(`El PDF "${sFileName}" aún no está procesado. Estado actual: ${sStatus}`, {
+                        title: "PDF no disponible"
+                    });
+                    
+                    // Deselect the item
+                    oPDFList.setSelectedItem(null);
+                    return;
+                }
+                
+                // Set selected PDF
+                oPDFModel.setProperty("/selectedPDF", sFileName);
+                MessageToast.show(`PDF seleccionado: ${sFileName}`);
+                
+                // Update button state
+                this._updateSendButtonState();
+            }
+        },
+
+        /**
+         * Handles deselecting PDF
+         */
+        onDeselectPDF() {
+            const oPDFModel = this.getView().getModel("pdf");
+            const oPDFList = this.byId("pdfList");
+            
+            // Clear selection
+            oPDFModel.setProperty("/selectedPDF", null);
+            oPDFList.setSelectedItem(null);
+            
+            MessageToast.show("PDF deseleccionado");
+            
+            // Update button state
+            this._updateSendButtonState();
+        },
+
+        /**
+         * Simulates upload progress
+         */
+        _simulateUploadProgress() {
+            const oPDFModel = this.getView().getModel("pdf");
+            let nProgress = 0;
+            
+            const oInterval = setInterval(() => {
+                nProgress += Math.random() * 20;
+                if (nProgress >= 100) {
+                    nProgress = 100;
+                    clearInterval(oInterval);
+                }
+                oPDFModel.setProperty("/uploadProgress", nProgress);
+            }, 500);
+        },
+
+        /**
+         * Formatter for PDF status icons
+         * @param {string} sStatus - The PDF status
+         * @returns {string} The icon name
+         */
+        formatPDFStatusIcon(sStatus) {
+            switch (sStatus) {
+                case "uploaded":
+                    return "sap-icon://upload";
+                case "processing":
+                    return "sap-icon://busy";
+                case "processed":
+                    return "sap-icon://accept";
+                case "error":
+                    return "sap-icon://error";
+                default:
+                    return "sap-icon://document";
+            }
+        },
+
+        /**
+         * Formatter for selected PDF message
+         * @param {string} sFileName - The selected PDF file name
+         * @returns {string} Formatted message for MessageStrip
+         */
+        formatSelectedPDFMessage(sFileName) {
+            if (!sFileName) return "";
+            return `📄 ${sFileName}`;
         }
     });
 });

@@ -3,7 +3,8 @@
     xmlns="sap.m"
     xmlns:core="sap.ui.core"
     xmlns:f="sap.f"
-    xmlns:layout="sap.ui.layout">
+    xmlns:layout="sap.ui.layout"
+    xmlns:unified="sap.ui.unified">
     
     <f:DynamicPage id="dynamicPage" showFooter="true">
         <!-- Header -->
@@ -33,24 +34,85 @@
         <!-- Content - Chat Area -->
         <f:content>
             <VBox height="100%" justifyContent="SpaceBetween">
-                <!-- Model Selection - Compact Header -->
-                <Bar class="sapUiTinyMarginBottom">
-                    <contentLeft>
-                        <Label text="Modelo:" class="sapUiTinyMarginEnd"/>
-                        <ComboBox id="modelComboBox"
-                                 placeholder="Seleccionar modelo..."
-                                 items="{path: '/getAvailableModels'}"
-                                 width="200px"
-                                 selectedKey="{ui>/selectedModel}">
-                            <core:Item key="{id}" text="{modelName}" />
-                        </ComboBox>
-                    </contentLeft>
-                    <contentRight>
-                        <Button icon="sap-icon://settings" 
-                               type="Transparent" 
-                               tooltip="Configuración"/>
-                    </contentRight>
-                </Bar>
+                <!-- Model Selection and PDF Management -->
+                <VBox class="sapUiTinyMarginBottom">
+                    <!-- Model Selection Bar -->
+                    <Bar class="sapUiTinyMarginBottom">
+                        <contentLeft>
+                            <Label text="Modelo:" class="sapUiTinyMarginEnd"/>
+                            <ComboBox id="modelComboBox"
+                                     placeholder="Seleccionar modelo..."
+                                     items="{path: '/getAvailableModels'}"
+                                     width="200px"
+                                     selectedKey="{ui>/selectedModel}"
+                                     selectionChange=".onModelChange">
+                                <core:Item key="{id}" text="{modelName}" />
+                            </ComboBox>
+                        </contentLeft>
+                        <contentRight>
+                            <Button icon="sap-icon://settings" 
+                                   type="Transparent" 
+                                   tooltip="Configuración"/>
+                        </contentRight>
+                    </Bar>
+
+                    <!-- PDF Management Panel -->
+                    <Panel headerText="Gestión de PDFs" expandable="true" expanded="false" class="sapUiTinyMarginBottom">
+                        <content>
+                            <VBox class="sapUiSmallMargin">
+                                <!-- PDF Upload Section -->
+                                <VBox class="sapUiTinyMarginBottom">
+                                    <Label text="Subir nuevo PDF:" class="sapUiTinyMarginBottom"/>
+                                    <HBox alignItems="Center" class="sapUiTinyMarginBottom">
+                                        <unified:FileUploader id="pdfUploader"
+                                                            name="pdf"
+                                                            fileType="pdf"
+                                                            maximumFileSize="10"
+                                                            placeholder="Seleccionar archivo PDF..."
+                                                            width="300px"
+                                                            change="onFileChange"
+                                                            typeMissmatch="onTypeMismatch"
+                                                            fileSizeExceed="onFileSizeExceed"
+                                                            class="sapUiTinyMarginEnd"/>
+                                        <Button id="uploadButton"
+                                               text="Subir"
+                                               icon="sap-icon://upload"
+                                               type="Emphasized"
+                                               enabled="false"
+                                               press="onUploadPress"/>
+                                    </HBox>
+                                    <ProgressIndicator id="uploadProgress"
+                                                     visible="{pdf>/isUploading}"
+                                                     percentValue="{pdf>/uploadProgress}"
+                                                     displayValue="Subiendo PDF..."
+                                                     class="sapUiTinyMarginBottom"/>
+                                </VBox>
+
+                                <!-- Available PDFs List -->
+                                <VBox>
+                                    <Label text="PDFs disponibles:" class="sapUiTinyMarginBottom"/>
+                                    <List id="pdfList"
+                                          items="{pdf>/pdfs}"
+                                          mode="SingleSelect"
+                                          selectionChange="onPDFSelect"
+                                          noDataText="No hay PDFs disponibles">
+                                        <StandardListItem title="{pdf>fileName}"
+                                                        description="{pdf>status}"
+                                                        icon="{path: 'pdf>status', formatter: '.formatPDFStatusIcon'}"
+                                                        iconInset="false"
+                                                        type="Active"
+                                                        selected="{= ${pdf>fileName} === ${pdf>/selectedPDF}}">
+                                            <customData>
+                                                <core:CustomData key="fileName" value="{pdf>fileName}"/>
+                                                <core:CustomData key="status" value="{pdf>status}"/>
+                                            </customData>
+                                        </StandardListItem>
+                                    </List>
+                                </VBox>
+                            </VBox>
+                        </content>
+                    </Panel>
+                </VBox>
 
                 <!-- Chat Messages Area -->
                 <ScrollContainer id="chatContainer"
@@ -145,44 +207,16 @@
         <!-- Footer - Input Area -->
         <f:footer>
             <OverflowToolbar>
-                <!-- File Attachment Indicator -->
-                <Panel visible="{ui>/hasAttachedFile}" 
-                       backgroundDesign="Solid"
-                       class="sapUiTinyMarginEnd sapUiTinyMarginTop">
-                    <content>
-                        <HBox alignItems="Center" 
-                              justifyContent="SpaceBetween"
-                              class="sapUiTinyMargin">
-                            <HBox alignItems="Center">
-                                <core:Icon src="sap-icon://pdf-attachment" 
-                                          size="1.2rem" 
-                                          color="Positive"
-                                          class="sapUiTinyMarginEnd"/>
-                                <VBox>
-                                    <Text text="Archivo adjunto:" class="sapUiTinyText"/>
-                                    <Text text="{ui>/attachedFileName}" 
-                                          class="sapUiSmallText"
-                                          maxLines="1"/>
-                                </VBox>
-                            </HBox>
-                            <Button icon="sap-icon://decline" 
-                                   type="Transparent" 
-                                   tooltip="Remover archivo"
-                                   press=".onRemoveFile"/>
-                        </HBox>
-                    </content>
-                </Panel>
+                <!-- Selected PDF Indicator - Mejorado -->
+                <MessageStrip visible="{= ${pdf>/selectedPDF} !== null}" 
+                             text="{path: 'pdf>/selectedPDF', formatter: '.formatSelectedPDFMessage'}"
+                             type="Information" 
+                             showIcon="true"
+                             showCloseButton="true"
+                             close=".onDeselectPDF"
+                             class="sapUiTinyMarginEnd sapUiTinyMarginTop"/>
                 
                 <ToolbarSpacer/>
-                
-                <!-- File Upload Button -->
-                <Button icon="sap-icon://attachment" 
-                       type="Transparent" 
-                       tooltip="Adjuntar archivo PDF"
-                       press=".onAttachFile"/>
-                
-                <!-- Hidden File Uploader -->
-                <core:HTML content="&lt;input type='file' id='fileInput' accept='.pdf' style='display:none;' /&gt;"/>
                 
                 <TextArea id="chatInput"
                          placeholder="Escribe tu mensaje aquí..."
