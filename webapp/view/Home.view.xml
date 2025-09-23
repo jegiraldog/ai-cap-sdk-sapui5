@@ -120,7 +120,7 @@
                                                 
                                                 <!-- Assistant Response -->
                                                 <VBox visible="{= !${chat>isLoading}}">
-                                                    <Text text="{chat>text}" class="sapUiMediumText"/>
+                                                    <FormattedText htmlText="{path: 'chat>text', formatter: '.formatMarkdownToHtml'}" class="sapUiMediumText"/>
                                                     <Text text="{chat>timestamp}" class="sapUiTinyText"/>
                                                 </VBox>
                                             </VBox>
