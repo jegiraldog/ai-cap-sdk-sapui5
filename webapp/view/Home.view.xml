@@ -81,16 +81,18 @@
                         <VBox class="sapUiTinyMarginBottom">
                             <!-- User Message -->
                             <VBox visible="{= ${chat>type} === 'user'}">
-                                <HBox justifyContent="End" class="sapUiTinyMarginBottom">
-                                    <Panel backgroundDesign="Solid" width="90%">
-                                        <content>
-                                            <VBox class="sapUiTinyMargin">
-                                                <Text text="{chat>text}" class="sapUiMediumText"/>
-                                                <Text text="{chat>timestamp}" class="sapUiTinyText"/>
-                                            </VBox>
-                                        </content>
-                                    </Panel>
-                                </HBox>
+                                <FlexBox justifyContent="End" class="sapUiTinyMarginBottom">
+                                    <MessageStrip 
+                                        text="{chat>text}" 
+                                        type="Information" 
+                                        showIcon="false"
+                                        tooltip="{chat>fullTimestamp}"
+                                        class="sapUiNoMargin">
+                                        <layoutData>
+                                            <FlexItemData growFactor="0" shrinkFactor="1" baseSize="65%"/>
+                                        </layoutData>
+                                    </MessageStrip>
+                                </FlexBox>
                             </VBox>
 
                             <!-- Assistant Message -->
