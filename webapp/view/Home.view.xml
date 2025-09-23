@@ -145,16 +145,55 @@
         <!-- Footer - Input Area -->
         <f:footer>
             <OverflowToolbar>
+                <!-- File Attachment Indicator -->
+                <Panel visible="{ui>/hasAttachedFile}" 
+                       backgroundDesign="Solid"
+                       class="sapUiTinyMarginEnd sapUiTinyMarginTop">
+                    <content>
+                        <HBox alignItems="Center" 
+                              justifyContent="SpaceBetween"
+                              class="sapUiTinyMargin">
+                            <HBox alignItems="Center">
+                                <core:Icon src="sap-icon://pdf-attachment" 
+                                          size="1.2rem" 
+                                          color="Positive"
+                                          class="sapUiTinyMarginEnd"/>
+                                <VBox>
+                                    <Text text="Archivo adjunto:" class="sapUiTinyText"/>
+                                    <Text text="{ui>/attachedFileName}" 
+                                          class="sapUiSmallText"
+                                          maxLines="1"/>
+                                </VBox>
+                            </HBox>
+                            <Button icon="sap-icon://decline" 
+                                   type="Transparent" 
+                                   tooltip="Remover archivo"
+                                   press=".onRemoveFile"/>
+                        </HBox>
+                    </content>
+                </Panel>
+                
                 <ToolbarSpacer/>
+                
+                <!-- File Upload Button -->
+                <Button icon="sap-icon://attachment" 
+                       type="Transparent" 
+                       tooltip="Adjuntar archivo PDF"
+                       press=".onAttachFile"/>
+                
+                <!-- Hidden File Uploader -->
+                <core:HTML content="&lt;input type='file' id='fileInput' accept='.pdf' style='display:none;' /&gt;"/>
+                
                 <TextArea id="chatInput"
                          placeholder="Escribe tu mensaje aquí..."
                          rows="1"
-                         width="70%"
+                         width="65%"
                          maxLength="4000"
                          growing="true"
                          growingMaxLines="4"
                          showExceededText="false"
                          liveChange=".onInputChange"/>
+                
                 <Button id="askButton"
                        icon="sap-icon://paper-plane"
                        type="Emphasized"
