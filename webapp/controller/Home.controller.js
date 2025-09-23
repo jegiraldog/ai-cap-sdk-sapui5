@@ -24,27 +24,30 @@ sap.ui.define([
             const oUIModel = new JSONModel({
                 selectedModel: "",
                 canSend: false,
-                inputLength: 0
+                inputLength: 0,
+                attachedFile: null,
+                hasAttachedFile: false,
+                attachedFileName: ""
             });
             this.getView().setModel(oUIModel, "ui");
         },
 
         onAskQuestion() {
-            // Get the question from the input
+            // Obtener valores de la interfaz
             const oTextArea = this.byId("chatInput");
             const sQuestion = oTextArea.getValue().trim();
+            const oComboBox = this.byId("modelComboBox");
+            const sSelectedModel = oComboBox.getSelectedKey();
+            const oUIModel = this.getView().getModel("ui");
+            const bHasAttachedFile = oUIModel.getProperty("/hasAttachedFile");
+            const oAttachedFile = oUIModel.getProperty("/attachedFile");
 
-            // Validate question
+            // Validaciones centralizadas
             if (!sQuestion) {
                 MessageToast.show("Por favor, ingresa una pregunta");
                 return;
             }
 
-            // Get selected model
-            const oComboBox = this.byId("modelComboBox");
-            const sSelectedModel = oComboBox.getSelectedKey();
-
-            // Validate model selection
             if (!sSelectedModel) {
                 MessageBox.warning("Por favor, selecciona un modelo antes de hacer una pregunta", {
                     title: "Modelo no seleccionado"
@@ -52,61 +55,155 @@ sap.ui.define([
                 return;
             }
 
-            // Show busy indicator and disable button
+            if (bHasAttachedFile && !oAttachedFile) {
+                MessageToast.show("Error: archivo PDF no válido");
+                return;
+            }
+
+            // Preparar UI para procesamiento
             this._setBusyState(true);
-
-            // Clear input
             oTextArea.setValue("");
-
-            // Add user message first
             this._addMessageToChat(sQuestion, "user");
 
-            // Show loading message after user message
-            const sLoadingId = this._addMessageToChat("Procesando pregunta...", "assistant", true);
+            const sLoadingMessage = bHasAttachedFile ? "Analizando PDF..." : "Procesando pregunta...";
+            const sLoadingId = this._addMessageToChat(sLoadingMessage, "assistant", true);
 
-            // Call AI service
-            this._oAIService.askQuestion(sQuestion, sSelectedModel)
-                .then((oResponse) => {
-                    // Hide busy indicator and enable button
+            // Llamada directa al servicio apropiado
+            if (bHasAttachedFile) {
+                this._askAboutPDF(sQuestion, oAttachedFile.name, sSelectedModel, sLoadingId);
+            } else {
+                this._askQuestion(sQuestion, sSelectedModel, sLoadingId);
+            }
+        },
+
+        /**
+         * Realiza consulta simple usando OData V2
+         * @param {string} sQuestion - La pregunta
+         * @param {string} sSelectedModel - El modelo seleccionado
+         * @param {string} sLoadingId - ID del mensaje de carga
+         */
+        _askQuestion(sQuestion, sSelectedModel, sLoadingId) {
+            const oModel = this.getOwnerComponent().getModel();
+            
+            oModel.callFunction("/askQuestion", {
+                method: "POST",
+                urlParameters: {
+                    question: sQuestion,
+                    selectedModel: sSelectedModel
+                },
+                success: (oData, response) => {
                     this._setBusyState(false);
-
-                    // Remove loading message
                     this._removeMessageFromChat(sLoadingId);
-
-                    // Add AI response to chat
-                    if (oResponse && oResponse.askQuestion && oResponse.askQuestion.value && oResponse.askQuestion.value.answer) {
-                        // Add model info to the response
-                        const sModelInfo = oResponse.askQuestion.value.model || sSelectedModel;
-                        const sDeploymentInfo = oResponse.askQuestion.value.deploymentId || '';
-                        
-                        this._addMessageToChat(oResponse.askQuestion.value.answer, "assistant", false, {
-                            model: sModelInfo,
-                            deploymentId: sDeploymentInfo
+                    
+                    if (oData && oData.answer) {
+                        this._addMessageToChat(oData.answer, "assistant", false, {
+                            model: oData.model || sSelectedModel,
+                            deploymentId: oData.deploymentId
                         });
                         
-                        // Show model info in a subtle way
-                        if (sModelInfo) {
-                            MessageToast.show(`Respuesta generada por: ${sModelInfo}`);
+                        if (oData.model) {
+                            MessageToast.show(`Respuesta generada por: ${oData.model}`);
                         }
                     } else {
                         this._addMessageToChat("No se recibió una respuesta válida del modelo", "error");
                     }
-                })
-                .catch((oError) => {
-                    // Hide busy indicator and enable button
+                },
+                error: (oError) => {
                     this._setBusyState(false);
-
-                    // Remove loading message
                     this._removeMessageFromChat(sLoadingId);
-
-                    // Show error message
-                    const sErrorMessage = oError.message || "Error al procesar la pregunta";
-                    this._addMessageToChat(sErrorMessage, "error");
                     
-                    MessageBox.error(sErrorMessage, {
-                        title: "Error en la consulta"
-                    });
+                    const sErrorMsg = `Error al procesar pregunta: ${oError.message || 'Error desconocido'}`;
+                    this._addMessageToChat(sErrorMsg, "error");
+                    MessageToast.show(sErrorMsg);
+                }
+            });
+        },
+
+        /**
+         * Realiza consulta sobre PDF usando OData V2
+         * @param {string} sQuestion - La pregunta
+         * @param {string} sFileName - Nombre del archivo PDF
+         * @param {string} sSelectedModel - El modelo seleccionado
+         * @param {string} sLoadingId - ID del mensaje de carga
+         */
+        _askAboutPDF(sQuestion, sFileName, sSelectedModel, sLoadingId) {
+            // Validaciones específicas para PDF
+            if (!sQuestion || !sFileName) {
+                MessageToast.show("Pregunta y archivo PDF son obligatorios");
+                this._setBusyState(false);
+                this._removeMessageFromChat(sLoadingId);
+                return;
+            }
+
+            const oModel = this.getOwnerComponent().getModel();
+            
+            // Llamada OData V2 directa siguiendo mejores prácticas
+            oModel.callFunction("/askAboutPDF", {
+                method: "POST",
+                urlParameters: {
+                    question: sQuestion,           // String(1000)
+                    fileName: sFileName,           // String(255)
+                    selectedModel: sSelectedModel  // String(255) - puede ser null/undefined
+                },
+                success: (oData, response) => {
+                    this._setBusyState(false);
+                    this._removeMessageFromChat(sLoadingId);
+                    
+                    // oData contiene la respuesta directa
+                    const sAnswer = oData.answer;
+                    const sModel = oData.model;
+                    const sDocument = oData.sourceDocument;
+                    const sTimestamp = oData.timestamp;
+                    
+                    if (sAnswer) {
+                        // Mostrar respuesta en la UI
+                        this._displayPDFResponse(oData);
+                        
+                        // Limpiar archivo adjunto después del análisis exitoso
+                        this._clearAttachedFile();
+                        
+                        if (sModel) {
+                            MessageToast.show(`Análisis de PDF generado por: ${sModel}`);
+                        }
+                    } else {
+                        this._addMessageToChat("No se recibió una respuesta válida del análisis PDF", "error");
+                    }
+                },
+                error: (oError) => {
+                    this._setBusyState(false);
+                    this._removeMessageFromChat(sLoadingId);
+                    
+                    const sErrorMsg = `Error al consultar PDF: ${oError.message || 'Error desconocido'}`;
+                    this._addMessageToChat(sErrorMsg, "error");
+                    MessageToast.show(sErrorMsg);
+                }
+            });
+        },
+
+        /**
+         * Muestra la respuesta del análisis PDF en la interfaz
+         * @param {object} oData - Datos de respuesta del servicio
+         */
+        _displayPDFResponse(oData) {
+            const sAnswer = oData.answer;
+            const sModel = oData.model;
+            const sDocument = oData.sourceDocument;
+            const sTimestamp = oData.timestamp;
+            
+            // Agregar respuesta principal
+            this._addMessageToChat(sAnswer, "assistant", false, {
+                model: sModel,
+                sourceDocument: sDocument,
+                timestamp: sTimestamp
+            });
+            
+            // Mostrar información adicional si está disponible
+            if (sDocument) {
+                const sDocInfo = `📄 Documento fuente: ${sDocument}`;
+                this._addMessageToChat(sDocInfo, "assistant", false, {
+                    isDocumentInfo: true
                 });
+            }
         },
 
         /**
@@ -311,15 +408,12 @@ formatMarkdownToHtml(sText) {
         onInputChange(oEvent) {
             const sValue = oEvent.getParameter("value");
             const oUIModel = this.getView().getModel("ui");
-            const oComboBox = this.byId("modelComboBox");
-            const sSelectedModel = oComboBox.getSelectedKey();
             
             // Update input length
             oUIModel.setProperty("/inputLength", sValue.length);
             
             // Update send button state
-            const bCanSend = sValue.trim().length > 0 && sSelectedModel;
-            oUIModel.setProperty("/canSend", bCanSend);
+            this._updateSendButtonState();
         },
 
         /**
@@ -334,6 +428,9 @@ formatMarkdownToHtml(sText) {
             if (oTextArea) {
                 oTextArea.setValue("");
             }
+            
+            // Clear attached file
+            this._clearAttachedFile();
             
             // Reset UI state
             const oUIModel = this.getView().getModel("ui");
@@ -404,8 +501,155 @@ formatMarkdownToHtml(sText) {
             return sInfo;
         },
 
+        /**
+         * Handles attach file button press
+         */
+        onAttachFile() {
+            // Trigger the hidden file input
+            const oFileInput = document.getElementById("fileInput");
+            if (oFileInput) {
+                oFileInput.click();
+                
+                // Add event listener for file selection
+                oFileInput.onchange = (event) => {
+                    const oFile = event.target.files[0];
+                    if (oFile) {
+                        this._handleFileSelection(oFile);
+                    }
+                };
+            }
+        },
+
+        /**
+         * Handles file selection from the file input
+         * @param {File} oFile - The selected file
+         */
+        _handleFileSelection(oFile) {
+            // Validate file type
+            if (oFile.type !== "application/pdf") {
+                MessageBox.error("Solo se permiten archivos PDF", {
+                    title: "Tipo de archivo no válido"
+                });
+                // Clear the file input
+                const oFileInput = document.getElementById("fileInput");
+                if (oFileInput) {
+                    oFileInput.value = "";
+                }
+                return;
+            }
+
+            // Validate file size (max 10MB)
+            const nMaxSize = 10 * 1024 * 1024; // 10MB in bytes
+            if (oFile.size > nMaxSize) {
+                MessageBox.error("El archivo es demasiado grande. Tamaño máximo: 10MB", {
+                    title: "Archivo demasiado grande"
+                });
+                // Clear the file input
+                const oFileInput = document.getElementById("fileInput");
+                if (oFileInput) {
+                    oFileInput.value = "";
+                }
+                return;
+            }
+
+            // Update UI model
+            const oUIModel = this.getView().getModel("ui");
+            oUIModel.setProperty("/attachedFile", oFile);
+            oUIModel.setProperty("/hasAttachedFile", true);
+            oUIModel.setProperty("/attachedFileName", oFile.name);
+
+            // Update button state
+            this._updateSendButtonState();
+
+            MessageToast.show(`Archivo adjuntado: ${oFile.name}`);
+        },
+
+        /**
+         * Handles file upload change event (legacy method for compatibility)
+         * @param {sap.ui.base.Event} oEvent - The file change event
+         */
+        onFileChange(oEvent) {
+            const oFileUploader = oEvent.getSource();
+            const oFile = oEvent.getParameter("files") && oEvent.getParameter("files")[0];
+            
+            if (!oFile) {
+                return;
+            }
+
+            this._handleFileSelection(oFile);
+        },
+
+        /**
+         * Handles removing attached file
+         */
+        onRemoveFile() {
+            this._clearAttachedFile();
+            MessageToast.show("Archivo removido");
+        },
+
+        /**
+         * Clears the attached file from UI model
+         */
+        _clearAttachedFile() {
+            const oUIModel = this.getView().getModel("ui");
+            oUIModel.setProperty("/attachedFile", null);
+            oUIModel.setProperty("/hasAttachedFile", false);
+            oUIModel.setProperty("/attachedFileName", "");
+
+            // Clear file uploader
+            const oFileUploader = this.byId("fileUploader");
+            if (oFileUploader) {
+                oFileUploader.clear();
+            }
+
+            // Update button state
+            this._updateSendButtonState();
+        },
+
+        /**
+         * Updates the send button state and text based on current conditions
+         */
+        _updateSendButtonState() {
+            const oUIModel = this.getView().getModel("ui");
+            const oTextArea = this.byId("chatInput");
+            const oComboBox = this.byId("modelComboBox");
+            const oAskButton = this.byId("askButton");
+            
+            const sValue = oTextArea ? oTextArea.getValue().trim() : "";
+            const sSelectedModel = oComboBox ? oComboBox.getSelectedKey() : "";
+            const bHasAttachedFile = oUIModel.getProperty("/hasAttachedFile");
+            
+            // Update send button state
+            const bCanSend = sValue.length > 0 && sSelectedModel;
+            oUIModel.setProperty("/canSend", bCanSend);
+            
+            // Update button text and icon based on attached file
+            if (oAskButton) {
+                if (bHasAttachedFile) {
+                    oAskButton.setText("Analizar PDF");
+                    oAskButton.setIcon("sap-icon://document-text");
+                    oAskButton.setTooltip("Analizar PDF con IA");
+                } else {
+                    oAskButton.setText("Enviar");
+                    oAskButton.setIcon("sap-icon://paper-plane");
+                    oAskButton.setTooltip("Enviar mensaje");
+                }
+            }
+        },
+
+        /**
+         * Formatter for file attachment display
+         * @param {string} sFileName - The file name
+         * @returns {string} Formatted file display text
+         */
+        formatFileDisplay(sFileName) {
+            if (!sFileName) return "";
+            return `📄 ${sFileName}`;
+        },
+
         onAnalyzePDF() {
-            // TODO: Implement PDF analysis functionality
+            // This method is now handled by onAskQuestion when file is attached
+            this.onAskQuestion();
         }
     });
 });
