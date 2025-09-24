@@ -59,11 +59,11 @@ sap.ui.define([
          * Asks a question about a PDF file using direct OData V2 call
          * Follows best practices with simplified approach
          * @param {string} sQuestion - The question about the PDF
-         * @param {string} sFileName - The PDF file name
+         * @param {string} sPdfBase64 - The PDF content in base64 format
          * @param {string} sSelectedModel - The selected model ID
          * @returns {Promise} Promise that resolves with the response
          */
-        askAboutPDF: function (sQuestion, sFileName, sSelectedModel) {
+        askAboutPDF: function (sQuestion, sPdfBase64, sSelectedModel) {
             return new Promise((resolve, reject) => {
                 if (!this._oModel) {
                     reject(new Error("OData model not available"));
@@ -71,14 +71,15 @@ sap.ui.define([
                 }
 
                 // Validaciones siguiendo mejores prácticas
-                if (!sQuestion || !sFileName) {
-                    reject(new Error("Pregunta y archivo PDF son obligatorios"));
+                if (!sQuestion || !sPdfBase64) {
+                    reject(new Error("Pregunta y contenido PDF son obligatorios"));
                     return;
                 }
 
                 const mParameters = {
                     question: sQuestion,           // String(1000)
-                    fileName: sFileName,           // String(255)
+                    pdfBase64: sPdfBase64,         // String - PDF content in base64
+                    fileName: "",
                     selectedModel: sSelectedModel  // String(255) - puede ser null/undefined
                 };
 

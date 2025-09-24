@@ -128,7 +128,20 @@ sap.ui.define([
          * @param {string} sLoadingId - ID del mensaje de carga
          */
         _askAboutPDF(sQuestion, sFileName, sSelectedModel, sLoadingId) {
-            this._oAIService.askAboutPDF(sQuestion, sFileName, sSelectedModel)
+            // Obtener el contenido base64 del PDF
+            const oPDFModel = this.getView().getModel("pdf");
+            const aPDFs = oPDFModel.getProperty("/pdfs");
+            const oPDF = aPDFs.find(pdf => pdf.fileName === sFileName);
+            
+            if (!oPDF || !oPDF.base64Content) {
+                this._setBusyState(false);
+                this._removeMessageFromChat(sLoadingId);
+                this._addMessageToChat("Error: Contenido del PDF no disponible", "error");
+                MessageToast.show("Error: Contenido del PDF no disponible");
+                return;
+            }
+            
+            this._oAIService.askAboutPDF(sQuestion, oPDF.base64Content, sSelectedModel)
                 .then((oData) => {
                     this._setBusyState(false);
                     this._removeMessageFromChat(sLoadingId);
@@ -723,101 +736,57 @@ formatMarkdownToHtml(sText) {
         },
 
         /**
-         * Starts the upload process
+         * Starts the upload process - now converts directly to base64
          * @param {File} oFile - The file to upload
          */
         _startUploadProcess(oFile) {
-            const oPDFModel = this.getView().getModel("pdf");
-            const oUploadButton = this.byId("uploadButton");
-            
-            // Set uploading state
-            oPDFModel.setProperty("/isUploading", true);
-            oPDFModel.setProperty("/uploadProgress", 0);
-            oUploadButton.setEnabled(false);
-            
-            MessageToast.show("Iniciando subida del PDF...");
-            
-            // Simulate progress
-            this._simulateUploadProgress();
-            
-            // TEMPORAL: Simular subida exitosa
-            setTimeout(() => {
-                const oResponse = {
-                    success: true,
-                    fileName: oFile.name,
-                    message: `PDF "${oFile.name}" subido exitosamente (simulado)`,
-                    processing: true
-                };
-                this._handleUploadSuccess(oResponse, oFile.name);
-                
-                // Agregar PDF simulado a la lista
-                this._addSimulatedPDF(oFile.name);
-            }, 2000);
-        },
-
-        /**
-         * Adds a simulated PDF to the list
-         * @param {string} sFileName - The file name
-         */
-        _addSimulatedPDF(sFileName) {
-            const oPDFModel = this.getView().getModel("pdf");
-            const aPDFs = oPDFModel.getProperty("/pdfs") || [];
-            
-            // Agregar PDF simulado
-            const oNewPDF = {
-                fileName: sFileName,
-                uploadDate: new Date().toISOString(),
-                status: "processing",
-                wordCount: 0
-            };
-            
-            aPDFs.push(oNewPDF);
-            oPDFModel.setProperty("/pdfs", aPDFs);
-            
-            // Simular procesamiento completado después de 3 segundos
-            setTimeout(() => {
-                const aUpdatedPDFs = oPDFModel.getProperty("/pdfs");
-                const oPDF = aUpdatedPDFs.find(pdf => pdf.fileName === sFileName);
-                if (oPDF) {
-                    oPDF.status = "processed";
-                    oPDF.wordCount = Math.floor(Math.random() * 5000) + 1000;
-                    oPDFModel.setProperty("/pdfs", aUpdatedPDFs);
-                    MessageToast.show(`PDF "${sFileName}" procesado y listo para consultas`);
-                }
-            }, 3000);
-        },
-
-        /**
-         * Handles successful upload
-         * @param {object} oResponse - Upload response
-         * @param {string} sFileName - File name
-         */
-        _handleUploadSuccess(oResponse, sFileName) {
-            const oPDFModel = this.getView().getModel("pdf");
             const oFileUploader = this.byId("pdfUploader");
             const oUploadButton = this.byId("uploadButton");
             
-            // Reset uploading state
-            oPDFModel.setProperty("/isUploading", false);
-            oPDFModel.setProperty("/uploadProgress", 100);
-            oUploadButton.setEnabled(false);
+            MessageToast.show("Cargando PDF...");
             
-            // Clear file uploader
+            // Convert directly to base64 and add to list
+            this._addPDFWithBase64(oFile);
+            
+            // Clean up UI
             oFileUploader.clear();
-            
-            // Show success message
-            MessageToast.show(oResponse.message || "PDF subido exitosamente");
-            
-            // Show processing message if applicable
-            if (oResponse.processing) {
-                MessageToast.show("El PDF está siendo procesado. Estará disponible para consultas en breve.");
-            }
-            
-            // Reset progress after a delay
-            setTimeout(() => {
-                oPDFModel.setProperty("/uploadProgress", 0);
-            }, 2000);
+            oUploadButton.setEnabled(false);
         },
+
+        /**
+         * Adds a PDF with base64 content to the list
+         * @param {File} oFile - The PDF file to convert and add
+         */
+        _addPDFWithBase64(oFile) {
+            const oReader = new FileReader();
+            oReader.onload = (e) => {
+                const sBase64 = e.target.result.split(',')[1]; // Remover prefijo data:
+                
+                const oPDFModel = this.getView().getModel("pdf");
+                const aPDFs = oPDFModel.getProperty("/pdfs") || [];
+                
+                const oNewPDF = {
+                    fileName: oFile.name,
+                    base64Content: sBase64,        // Contenido base64 del PDF
+                    uploadDate: new Date().toISOString(),
+                    status: "processed",           // Inmediatamente disponible
+                    size: oFile.size,
+                    wordCount: Math.floor(oFile.size / 5) // Estimación basada en tamaño
+                };
+                
+                aPDFs.push(oNewPDF);
+                oPDFModel.setProperty("/pdfs", aPDFs);
+                
+                MessageToast.show(`PDF "${oFile.name}" cargado y listo para consultas`);
+            };
+            
+            oReader.onerror = () => {
+                MessageToast.show("Error al leer el archivo PDF");
+            };
+            
+            oReader.readAsDataURL(oFile);
+        },
+
 
         /**
          * Handles file type mismatch
@@ -899,22 +868,6 @@ formatMarkdownToHtml(sText) {
             this._updateSendButtonState();
         },
 
-        /**
-         * Simulates upload progress
-         */
-        _simulateUploadProgress() {
-            const oPDFModel = this.getView().getModel("pdf");
-            let nProgress = 0;
-            
-            const oInterval = setInterval(() => {
-                nProgress += Math.random() * 20;
-                if (nProgress >= 100) {
-                    nProgress = 100;
-                    clearInterval(oInterval);
-                }
-                oPDFModel.setProperty("/uploadProgress", nProgress);
-            }, 500);
-        },
 
         /**
          * Formatter for PDF status icons
