@@ -67,7 +67,7 @@
                                         <unified:FileUploader id="pdfUploader"
                                                             name="pdf"
                                                             fileType="pdf"
-                                                            maximumFileSize="10"
+                                                            maximumFileSize="5"
                                                             placeholder="Seleccionar archivo PDF..."
                                                             width="300px"
                                                             change="onFileChange"

@@ -8,11 +8,13 @@
     "sapui5"
   ],
   "main": "webapp/index.html",
-  "dependencies": {},
+  "dependencies": {
+    "pdfjs-dist": "^5.4.149"
+  },
   "devDependencies": {
-    "@ui5/cli": "^4.0.16",
+    "@sap-ux/ui5-middleware-fe-mockserver": "2",
     "@sap/ux-ui5-tooling": "1",
-    "@sap-ux/ui5-middleware-fe-mockserver": "2"
+    "@ui5/cli": "^4.0.16"
   },
   "scripts": {
     "start": "fiori run --open \"test/flp.html#app-preview\"",

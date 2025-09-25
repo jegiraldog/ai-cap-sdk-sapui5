@@ -56,14 +56,13 @@ sap.ui.define([
         },
 
         /**
-         * Asks a question about a PDF file using direct OData V2 call
-         * Follows best practices with simplified approach
+         * Asks a question about a PDF file using XMLHttpRequest to handle large text content
          * @param {string} sQuestion - The question about the PDF
-         * @param {string} sPdfBase64 - The PDF content in base64 format
+         * @param {string} sPdfText - The PDF content as plain text
          * @param {string} sSelectedModel - The selected model ID
          * @returns {Promise} Promise that resolves with the response
          */
-        askAboutPDF: function (sQuestion, sPdfBase64, sSelectedModel) {
+        askAboutPDF: function (sQuestion, sPdfText, sSelectedModel) {
             return new Promise((resolve, reject) => {
                 if (!this._oModel) {
                     reject(new Error("OData model not available"));
@@ -71,46 +70,63 @@ sap.ui.define([
                 }
 
                 // Validaciones siguiendo mejores prácticas
-                if (!sQuestion || !sPdfBase64) {
+                if (!sQuestion || !sPdfText) {
                     reject(new Error("Pregunta y contenido PDF son obligatorios"));
                     return;
                 }
 
-                const mParameters = {
-                    question: sQuestion,           // String(1000)
-                    pdfBase64: sPdfBase64,         // String - PDF content in base64
-                    fileName: "",
-                    selectedModel: sSelectedModel  // String(255) - puede ser null/undefined
-                };
+                // Use XMLHttpRequest to send large text content in request body
+                const xhr = new XMLHttpRequest();
+                const sServiceUrl = this._oModel.sServiceUrl || '/odata/v2/ai';
+                const sUrl = `${sServiceUrl}/askAboutPDF`;
+                
+                xhr.open('POST', sUrl, true);
+                xhr.setRequestHeader('Content-Type', 'application/json');
+                xhr.setRequestHeader('Accept', 'application/json');
+                
+                // Add CSRF token if available
+                const sCsrfToken = this._oModel.getSecurityToken();
+                if (sCsrfToken) {
+                    xhr.setRequestHeader('X-CSRF-Token', sCsrfToken);
+                }
 
-                // Llamada OData V2 directa siguiendo el patrón del ejemplo
-                this._oModel.callFunction("/askAboutPDF", {
-                    method: "POST",
-                    urlParameters: mParameters,
-                    success: function (oData, response) {
-                        // oData contiene la respuesta directa del servicio
-                        resolve(oData);
-                    },
-                    error: function (oError) {
-                        console.error("Error calling askAboutPDF:", oError);
+                xhr.onload = function() {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        try {
+                            const oResponse = JSON.parse(xhr.responseText);
+                            resolve(oResponse);
+                        } catch (e) {
+                            reject(new Error('Error al procesar la respuesta del servidor'));
+                        }
+                    } else {
+                        let sErrorMessage = `Error al consultar PDF: ${xhr.status} ${xhr.statusText}`;
                         
-                        // Manejo de errores mejorado siguiendo mejores prácticas
-                        let sErrorMessage = `Error al consultar PDF: ${oError.message || 'Error desconocido'}`;
-                        
-                        if (oError.responseText) {
-                            try {
-                                const oErrorData = JSON.parse(oError.responseText);
-                                if (oErrorData.error && oErrorData.error.message) {
-                                    sErrorMessage = oErrorData.error.message.value || oErrorData.error.message;
-                                }
-                            } catch (e) {
-                                // Usar mensaje de error por defecto
+                        try {
+                            const oErrorData = JSON.parse(xhr.responseText);
+                            if (oErrorData.error && oErrorData.error.message) {
+                                sErrorMessage = oErrorData.error.message.value || oErrorData.error.message;
                             }
+                        } catch (e) {
+                            // Use default error message
                         }
                         
                         reject(new Error(sErrorMessage));
                     }
-                });
+                };
+                
+                xhr.onerror = function() {
+                    reject(new Error('Error de red al consultar PDF'));
+                };
+
+                // Send data in request body as JSON
+                const oRequestData = {
+                    question: sQuestion,
+                    pdfText: sPdfText,
+                    fileName: "",
+                    selectedModel: sSelectedModel
+                };
+                
+                xhr.send(JSON.stringify(oRequestData));
             });
         },
 

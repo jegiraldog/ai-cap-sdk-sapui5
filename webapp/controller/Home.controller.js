@@ -9,6 +9,8 @@ sap.ui.define([
 
     return Controller.extend("com.globant.aichat.aichatpdfui5.controller.Home", {
         onInit() {
+            // Load PDF.js library
+            this._loadPDFJS();
 
             // Initialize AI Service
             const oModel = this.getOwnerComponent().getModel();
@@ -128,12 +130,12 @@ sap.ui.define([
          * @param {string} sLoadingId - ID del mensaje de carga
          */
         _askAboutPDF(sQuestion, sFileName, sSelectedModel, sLoadingId) {
-            // Obtener el contenido base64 del PDF
+            // Obtener el contenido de texto del PDF
             const oPDFModel = this.getView().getModel("pdf");
             const aPDFs = oPDFModel.getProperty("/pdfs");
             const oPDF = aPDFs.find(pdf => pdf.fileName === sFileName);
             
-            if (!oPDF || !oPDF.base64Content) {
+            if (!oPDF || !oPDF.textContent) {
                 this._setBusyState(false);
                 this._removeMessageFromChat(sLoadingId);
                 this._addMessageToChat("Error: Contenido del PDF no disponible", "error");
@@ -141,18 +143,33 @@ sap.ui.define([
                 return;
             }
             
-            this._oAIService.askAboutPDF(sQuestion, oPDF.base64Content, sSelectedModel)
+            this._oAIService.askAboutPDF(sQuestion, oPDF.textContent, sSelectedModel)
                 .then((oData) => {
                     this._setBusyState(false);
                     this._removeMessageFromChat(sLoadingId);
                     
-                    // La respuesta viene en oData.askAboutPDF.value igual que askQuestion
-                    const oResponse = oData.askAboutPDF?.value || oData.askAboutPDF || oData;
+                    console.log("Response from askAboutPDF:", oData); // Debug log
                     
-                    const sAnswer = oResponse.answer;
-                    const sModel = oResponse.model;
-                    const sDocument = oResponse.sourceDocument;
-                    const sTimestamp = oResponse.timestamp;
+                    // Handle different response structures
+                    let oResponse;
+                    if (oData.d && oData.d.askAboutPDF) {
+                        // OData wrapped response
+                        oResponse = oData.d.askAboutPDF.value || oData.d.askAboutPDF;
+                    } else if (oData.askAboutPDF) {
+                        // Direct OData response
+                        oResponse = oData.askAboutPDF.value || oData.askAboutPDF;
+                    } else if (oData.d) {
+                        // Simple OData wrapped response
+                        oResponse = oData.d;
+                    } else {
+                        // Direct response
+                        oResponse = oData;
+                    }
+                    
+                    const sAnswer = oResponse?.answer;
+                    const sModel = oResponse?.model;
+                    const sDocument = oResponse?.sourceDocument;
+                    const sTimestamp = oResponse?.timestamp;
                     
                     if (sAnswer) {
                         // Mostrar respuesta en la UI
@@ -162,6 +179,7 @@ sap.ui.define([
                             MessageToast.show(`Análisis de PDF generado por: ${sModel}`);
                         }
                     } else {
+                        console.error("No answer found in response:", oResponse);
                         this._addMessageToChat("No se recibió una respuesta válida del análisis PDF", "error");
                     }
                 })
@@ -169,6 +187,7 @@ sap.ui.define([
                     this._setBusyState(false);
                     this._removeMessageFromChat(sLoadingId);
                     
+                    console.error("Error in askAboutPDF:", oError);
                     const sErrorMsg = oError.message || 'Error desconocido';
                     this._addMessageToChat(sErrorMsg, "error");
                     MessageToast.show(sErrorMsg);
@@ -736,17 +755,17 @@ formatMarkdownToHtml(sText) {
         },
 
         /**
-         * Starts the upload process - now converts directly to base64
+         * Starts the upload process - now extracts text from PDF
          * @param {File} oFile - The file to upload
          */
         _startUploadProcess(oFile) {
             const oFileUploader = this.byId("pdfUploader");
             const oUploadButton = this.byId("uploadButton");
             
-            MessageToast.show("Cargando PDF...");
+            MessageToast.show("Extrayendo texto del PDF...");
             
-            // Convert directly to base64 and add to list
-            this._addPDFWithBase64(oFile);
+            // Extract text and add to list
+            this._addPDFWithText(oFile);
             
             // Clean up UI
             oFileUploader.clear();
@@ -754,37 +773,55 @@ formatMarkdownToHtml(sText) {
         },
 
         /**
-         * Adds a PDF with base64 content to the list
-         * @param {File} oFile - The PDF file to convert and add
+         * Adds a PDF with extracted text content to the list
+         * @param {File} oFile - The PDF file to extract text from and add
          */
-        _addPDFWithBase64(oFile) {
-            const oReader = new FileReader();
-            oReader.onload = (e) => {
-                const sBase64 = e.target.result.split(',')[1]; // Remover prefijo data:
-                
-                const oPDFModel = this.getView().getModel("pdf");
-                const aPDFs = oPDFModel.getProperty("/pdfs") || [];
-                
-                const oNewPDF = {
-                    fileName: oFile.name,
-                    base64Content: sBase64,        // Contenido base64 del PDF
-                    uploadDate: new Date().toISOString(),
-                    status: "processed",           // Inmediatamente disponible
-                    size: oFile.size,
-                    wordCount: Math.floor(oFile.size / 5) // Estimación basada en tamaño
-                };
-                
-                aPDFs.push(oNewPDF);
-                oPDFModel.setProperty("/pdfs", aPDFs);
-                
-                MessageToast.show(`PDF "${oFile.name}" cargado y listo para consultas`);
+        _addPDFWithText(oFile) {
+            // Set status to processing
+            const oPDFModel = this.getView().getModel("pdf");
+            const aPDFs = oPDFModel.getProperty("/pdfs") || [];
+            
+            const oNewPDF = {
+                fileName: oFile.name,
+                textContent: "",               // Will be filled after extraction
+                uploadDate: new Date().toISOString(),
+                status: "processing",          // Processing text extraction
+                size: oFile.size,
+                wordCount: 0                   // Will be calculated after extraction
             };
             
-            oReader.onerror = () => {
-                MessageToast.show("Error al leer el archivo PDF");
-            };
+            aPDFs.push(oNewPDF);
+            oPDFModel.setProperty("/pdfs", aPDFs);
             
-            oReader.readAsDataURL(oFile);
+            // Extract text from PDF
+            this._extractTextFromPDF(oFile)
+                .then((sExtractedText) => {
+                    // Update the PDF entry with extracted text
+                    const aPDFsUpdated = oPDFModel.getProperty("/pdfs");
+                    const oPDFToUpdate = aPDFsUpdated.find(pdf => pdf.fileName === oFile.name);
+                    
+                    if (oPDFToUpdate) {
+                        oPDFToUpdate.textContent = sExtractedText;
+                        oPDFToUpdate.status = "processed";
+                        oPDFToUpdate.wordCount = sExtractedText.split(/\s+/).length;
+                        
+                        oPDFModel.setProperty("/pdfs", aPDFsUpdated);
+                        MessageToast.show(`PDF "${oFile.name}" procesado y listo para consultas`);
+                    }
+                })
+                .catch((oError) => {
+                    // Update status to error
+                    const aPDFsUpdated = oPDFModel.getProperty("/pdfs");
+                    const oPDFToUpdate = aPDFsUpdated.find(pdf => pdf.fileName === oFile.name);
+                    
+                    if (oPDFToUpdate) {
+                        oPDFToUpdate.status = "error";
+                        oPDFModel.setProperty("/pdfs", aPDFsUpdated);
+                    }
+                    
+                    MessageToast.show(`Error al procesar PDF: ${oError.message}`);
+                    console.error("Error extracting text from PDF:", oError);
+                });
         },
 
 
@@ -803,7 +840,7 @@ formatMarkdownToHtml(sText) {
          * @param {sap.ui.base.Event} oEvent - The file size exceed event
          */
         onFileSizeExceed(oEvent) {
-            MessageBox.error("El archivo es demasiado grande. Tamaño máximo: 10MB", {
+            MessageBox.error("El archivo es demasiado grande. Tamaño máximo: 5MB", {
                 title: "Archivo demasiado grande"
             });
         },
@@ -897,6 +934,102 @@ formatMarkdownToHtml(sText) {
         formatSelectedPDFMessage(sFileName) {
             if (!sFileName) return "";
             return `📄 ${sFileName}`;
+        },
+
+        // ========== PDF.js INTEGRATION METHODS ==========
+
+        /**
+         * Loads PDF.js library dynamically
+         */
+        _loadPDFJS() {
+            // PDF.js will be loaded from node_modules
+            if (typeof window.pdfjsLib === 'undefined') {
+                // Set worker source for PDF.js
+                window.pdfjsLib = window.pdfjsLib || {};
+                // The worker will be loaded from the CDN for simplicity
+                if (typeof window.pdfjsLib.GlobalWorkerOptions !== 'undefined') {
+                    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                }
+            }
+        },
+
+        /**
+         * Extracts text from a PDF file
+         * @param {File} oFile - The PDF file to extract text from
+         * @returns {Promise<string>} Promise that resolves with extracted text
+         */
+        _extractTextFromPDF(oFile) {
+            return new Promise((resolve, reject) => {
+                const fileReader = new FileReader();
+                
+                fileReader.onload = async (e) => {
+                    try {
+                        const arrayBuffer = e.target.result;
+                        
+                        // Load PDF.js from CDN if not already loaded
+                        await this._ensurePDFJSLoaded();
+                        
+                        // Load the PDF document
+                        const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                        let fullText = '';
+                        
+                        // Extract text from each page
+                        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                            const page = await pdf.getPage(pageNum);
+                            const textContent = await page.getTextContent();
+                            
+                            // Combine text items from the page
+                            const pageText = textContent.items
+                                .map(item => item.str)
+                                .join(' ');
+                            
+                            fullText += pageText + '\n\n';
+                        }
+                        
+                        resolve(fullText.trim());
+                        
+                    } catch (error) {
+                        console.error('Error extracting text from PDF:', error);
+                        reject(new Error(`Error al extraer texto del PDF: ${error.message}`));
+                    }
+                };
+                
+                fileReader.onerror = () => {
+                    reject(new Error('Error al leer el archivo PDF'));
+                };
+                
+                fileReader.readAsArrayBuffer(oFile);
+            });
+        },
+
+        /**
+         * Ensures PDF.js is loaded from CDN
+         * @returns {Promise} Promise that resolves when PDF.js is loaded
+         */
+        _ensurePDFJSLoaded() {
+            return new Promise((resolve, reject) => {
+                // Check if PDF.js is already loaded
+                if (window.pdfjsLib && window.pdfjsLib.getDocument) {
+                    resolve();
+                    return;
+                }
+                
+                // Load PDF.js from CDN
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+                script.onload = () => {
+                    // Set worker source
+                    if (window.pdfjsLib && window.pdfjsLib.GlobalWorkerOptions) {
+                        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                    }
+                    resolve();
+                };
+                script.onerror = () => {
+                    reject(new Error('Error al cargar PDF.js desde CDN'));
+                };
+                
+                document.head.appendChild(script);
+            });
         }
     });
 });
